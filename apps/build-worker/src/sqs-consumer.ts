@@ -12,6 +12,7 @@ const sqs = new SQSClient({ region: process.env.AWS_REGION });
 const QUEUE_URL = process.env.SQS_QUEUE_URL!;
 const POLL_INTERVAL_MS = 5_000;
 const VISIBILITY_TIMEOUT = 900;
+const PRIMARY_BACKEND_URL = process.env.PRIMARY_BACKEND_URL || 'http://localhost:3000';
 
 export async function startBuildConsumer(): Promise<never> {
     console.log(`[sqs] Polling queue: ${QUEUE_URL}`);
@@ -25,7 +26,7 @@ export async function startBuildConsumer(): Promise<never> {
         }
 
         try {
-            const job = parseJobFromMessage(message);
+            const job = await parseJobFromMessage(message);
             console.log(`[sqs] Processing build job ${job.id} — ${job.repoName}`);
             await runBuildInContainer(job);
             console.log(`[sqs] Build job ${job.id} completed successfully`);
@@ -55,7 +56,7 @@ async function pollMessage(): Promise<Message | undefined> {
     }
 }
 
-function parseJobFromMessage(message: Message): BuildJob {
+async function parseJobFromMessage(message: Message): Promise<BuildJob> {
     if (!message.Body) {
         throw new Error(`Message ${message.MessageId} has no body`);
     }
@@ -73,6 +74,17 @@ function parseJobFromMessage(message: Message): BuildJob {
             `Message ${message.MessageId} contains an invalid BuildJob payload`
         );
     }
+
+    //Generate the Github Installation Id
+    try {
+        const response = await fetch(`${PRIMARY_BACKEND_URL}/github/installation-token?user_id=${payload.user_id}`)
+        const installation_id: any = await response.json()
+        payload.gitToken = installation_id.data.token
+    } catch(e) {
+        console.error(`Error Generating a github Token: ${e}`)
+        payload.gitToken = null
+    }
+
 
     // Validate optional envVars — must be a plain object with string values
     if (payload.envVars !== undefined) {

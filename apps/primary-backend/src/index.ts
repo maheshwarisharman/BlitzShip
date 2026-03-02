@@ -4,6 +4,7 @@ import {prisma} from '@repo/db'
 
 //v1 Routes
 import githubRoutes from './routes/githubRoutes.js'
+import deployProjectRoutes from './routes/deployProject.js'
 
 const app: Express = express()
 app.use(cors())
@@ -41,7 +42,8 @@ app.post('/add-user', async (req, res) => {
     }
 })
 
-app.use('/api/v1/github', githubRoutes)
+app.use('/github', githubRoutes)
+app.use('/deploy', deployProjectRoutes)
 
 app.listen(3000, () => {
     console.log("Server is running on port 3000");

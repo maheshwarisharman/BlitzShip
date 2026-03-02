@@ -39,7 +39,12 @@ export async function runBuildInContainer(job: BuildJob) {
       'sleep', 'infinity'
     ])
 
-    const cloneUrl = buildAuthenticatedUrl(job.repoUrl, job?.gitToken)
+    let cloneUrl = job.repoUrl
+
+    if (job.gitToken) {
+      cloneUrl = buildAuthenticatedUrl(job.repoName, job.gitToken)
+    }
+
 
     //Clone the Git Repo inside running container
     await dockerExec(containerId, [
@@ -173,11 +178,8 @@ async function cleanupContainer(containerId: string) {
   }
 }
 
-function buildAuthenticatedUrl(repoUrl: string, gitToken?: string): string {
+function buildAuthenticatedUrl(repoName: string, gitToken?: string): string {
 
-  if (!gitToken) return repoUrl;
-  const url = new URL(repoUrl);
-  url.username = gitToken;
-  return url.toString();
-
+  const cloneUrl = `https://x-access-token:${gitToken}@github.com/${repoName}.git`
+  return cloneUrl
 }

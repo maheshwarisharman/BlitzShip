@@ -13,6 +13,7 @@ const QUEUE_URL = process.env.SQS_QUEUE_URL!
 router.post('/create-project', validate(createNewProjectSchema), async (req, res) => {
 
     const body = req.body
+    console.log(body)
 
     try {
         const project = await prisma.project.create({
@@ -23,9 +24,10 @@ router.post('/create-project', validate(createNewProjectSchema), async (req, res
                 github_url: body.github_url,
                 build_cmd: body.build_cmd,
                 output_dir: body.output_dir,
+                repoName: body.repoName,
                 build_branch: body.build_branch,
                 primary_domain: body.primary_domain,
-                project_env: body.project_env
+                project_env: body.project_envs
             }
         })
         res.status(200).json({
@@ -34,6 +36,7 @@ router.post('/create-project', validate(createNewProjectSchema), async (req, res
         })
 
     } catch (e) {
+        console.log(e)
         res.status(500).json({
             message: "Some Error occured",
             error: e
@@ -44,7 +47,8 @@ router.post('/create-project', validate(createNewProjectSchema), async (req, res
 router.post('/create-deployment', validate(createDeploymentSchema), async (req, res) => {
 
     const body = req.body
-
+    console.log(body);
+    
     try {
 
         const deployment = await prisma.deployment.create({
@@ -54,23 +58,20 @@ router.post('/create-deployment', validate(createDeploymentSchema), async (req, 
         })
 
         const project = await prisma.project.findUniqueOrThrow({
-            where: { project_id: body.project_id },
-            include: { project_env: true }
+            where: { project_id: body.project_id }
         })
 
-        const envVars: Record<string, string> = {}
-        if (project.project_env?.env_variable) {
-            for (const entry of project.project_env.env_variable as { key: string; value: string }[]) {
-                envVars[entry.key] = entry.value
-            }
-        }
+        const envVars: Record<string, string> = project.project_env
+            ? (project.project_env as Record<string, string>)
+            : {}
 
         const job: BuildJob = {
             id: deployment.deployment_id,
-            repoName: project.name,
+            repoName: project.repoName,
             repoUrl: project.github_url,
             buildCommand: project.build_cmd,
             buildOutDir: project.output_dir,
+            user_id: project.user_id,
             envVars: Object.keys(envVars).length > 0 ? envVars : undefined,
         }
 
@@ -89,9 +90,13 @@ router.post('/create-deployment', validate(createDeploymentSchema), async (req, 
         })
 
     } catch (e) {
+        console.log(e);
+        
         res.status(500).json({
             message: "Some Error occured",
             error: e
         })
     }
 })
+
+export default router

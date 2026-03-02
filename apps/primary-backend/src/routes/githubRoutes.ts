@@ -143,7 +143,7 @@ router.post('/auth/callback', async (req: Request, res: Response) => {
  * Receives installation events when users install/uninstall the GitHub App.
  * Stores the installation_id linked to the user for future token generation.
  */
-router.post('/webhook/github', async (req: Request, res: Response) => {
+router.post('/webhook', async (req: Request, res: Response) => {
     const event = req.headers['x-github-event'] as string
     const { action, installation, sender } = req.body
     const senderGithubUserId = String(sender.id)

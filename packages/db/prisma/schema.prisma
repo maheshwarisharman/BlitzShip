@@ -26,17 +26,18 @@ model User {
 model Project {
   project_id     Int                    @id @default(autoincrement())
   name           String
-  description    String
+  description    String?
   user_id        String
   user           User                   @relation(fields: [user_id], references: [id])
   created_at     DateTime               @default(now())
   github_url     String
   build_cmd      String
   output_dir     String
+  repoName       String
   build_branch   String
   primary_domain String
   deployments    Deployment[]
-  project_env    Project_ENV_Variables?
+  project_env    Json?
 }
 
 model Deployment {
@@ -47,11 +48,4 @@ model Deployment {
   is_build_success Boolean?
   preview_url      String?
   build_logs       String?
-}
-
-model Project_ENV_Variables {
-  id           Int     @id @default(autoincrement())
-  project_id   Int     @unique
-  project      Project @relation(fields: [project_id], references: [project_id])
-  env_variable Json[]
 }

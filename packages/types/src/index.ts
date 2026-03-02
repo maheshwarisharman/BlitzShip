@@ -6,4 +6,5 @@ export interface BuildJob {
     buildCommand: string;
     buildOutDir: string;
     envVars?: Record<string, string>;
+    user_id: string
 }

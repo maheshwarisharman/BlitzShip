@@ -23,7 +23,6 @@
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "primary-backend": "workspace:*",
     "zod": "^4.3.6"
   }
 }
