@@ -30,6 +30,12 @@ router.post('/create-project', validate(createNewProjectSchema), async (req, res
                 project_env: body.project_envs
             }
         })
+
+        const domain = await prisma.domain.create({
+            data: {
+                domain_url: body.primary_domain,
+            }
+        })
         res.status(200).json({
             message: "Project Created Successfully",
             data: project
