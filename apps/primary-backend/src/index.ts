@@ -12,7 +12,9 @@ import { ACMCronJob } from "./handlers/acmCertCron.js";
 
 const app: Express = express();
 
-app.use(cors());
+app.use(cors({
+  origin: "*"
+}));
 app.use(express.json());
 
 app.use(clerkMiddleware());
@@ -89,6 +91,6 @@ app.use("/deploy", requireAuth(), deployProjectRoutes);
 app.use("/domain", requireAuth(), domainRoutes);
 app.use("/projects", requireAuth(), projectRoutes);
 
-app.listen(3000, () => {
-  console.log("Server is running on port 3000");
+app.listen(4000, () => {
+  console.log("Server is running on port 4000");
 });

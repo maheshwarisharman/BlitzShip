@@ -1,28 +1,27 @@
+"use client"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Search, Github, MoreHorizontal, ExternalLink } from "lucide-react";
+import axios from "axios"
+import  {useEffect, useState} from "react"
 
 export default function DashboardPage() {
-  const projects = [
-    {
-      name: "vercel-clone",
-      url: "vercel-clone.vercel.app",
-      framework: "Next.js",
-      repo: "sharmanmaheshwari/vercel-clone",
-      timeAgo: "2h ago",
-      branch: "main",
-    },
-    {
-      name: "landing-page",
-      url: "landing-page.vercel.app",
-      framework: "React",
-      repo: "sharmanmaheshwari/landing-page",
-      timeAgo: "1d ago",
-      branch: "main",
-    },
-  ];
+
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL
+
+    const [projects, setProjects] = useState([])
+
+
+    const fetchProject = async () => {
+        const projects = await axios.get(`https://nonstimulative-donnetta-horotelic.ngrok-free.dev/projects/all`)
+        setProjects(projects.data.data)
+    }
+
+    useEffect(() => {
+      fetchProject()
+    }, [])
 
   return (
     <div className="flex flex-col gap-8 w-full">

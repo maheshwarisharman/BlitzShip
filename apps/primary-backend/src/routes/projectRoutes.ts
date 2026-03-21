@@ -5,6 +5,7 @@ import { getAuth } from "@clerk/express"
 const router: Router = Router()
 
 router.get('/all', async (req, res) => {
+    console.log("Hell")
     const auth = getAuth(req);
     const clerkUserId = auth.userId;
 

@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+
+
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
       {/* Top Header Navigation */}
