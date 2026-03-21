@@ -11,13 +11,13 @@ export async function requestCertificate(domain: string): Promise<string> {
     DomainName: domain,
     ValidationMethod: "DNS",
     Tags: [{ Key: "platform", Value: "myplatform" }]
-  });
+  }); 
 
-  const response = await acm.send(command);
+  const response = await acm.send(command); 
 
   if (!response.CertificateArn) {
     throw new Error("ACM did not return a CertificateArn");
-  }
+  } 
 
   return response.CertificateArn;
 }
