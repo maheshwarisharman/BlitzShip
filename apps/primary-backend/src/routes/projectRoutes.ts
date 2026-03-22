@@ -3,24 +3,26 @@ import { prisma } from "@repo/db"
 import { getAuth } from "@clerk/express"
 
 const router: Router = Router()
-
+    
 router.get('/all', async (req, res) => {
-    console.log("Hell")
     const auth = getAuth(req);
     const clerkUserId = auth.userId;
+
+
+    console.log("Clerk Id", clerkUserId)
 
     if (!clerkUserId) {
       return res.status(401).json({
         message: "Unauthorized",
       });
     }
-  
+                                                                                        
     try {
         const projects = await prisma.project.findMany({
             where: {
                 user_id: clerkUserId
             }
-        })
+        })                                  
         res.status(200).json({
             message: "Projects fetched successfully",
             data: projects

@@ -2,6 +2,7 @@ import { Request, Response, Router } from "express";
 import axios from 'axios'
 import { prisma } from '@repo/db'
 import jwt from 'jsonwebtoken'
+import { getAuth, requireAuth } from "@clerk/express"
 
 const router: Router = Router()
 
@@ -134,6 +135,49 @@ router.post('/auth/callback', async (req: Request, res: Response) => {
         return res.status(500).json({
             success: false,
             error: 'GitHub authentication failed'
+        })
+    }
+})
+
+
+router.get('/is-github-linked', requireAuth(), async(req: Request, res: Response) => {
+    const auth = getAuth(req);
+    const clerkUserId = auth.userId;
+
+
+    if (!clerkUserId) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
+    try {
+
+        const user = await prisma.user.findUnique({
+            where: {
+                id: clerkUserId
+            },
+        })
+        if(!user) {
+            return res.status(404).json({message: "No User Found"})
+        }
+
+        if(user.github_user_id) {
+            return res.status(200).json({
+                message: "User is github linked",
+                success: true
+            })
+        } else {
+            return res.status(200).json({
+                success: false,
+                message: "user's github is not linked"
+            })
+        }
+
+    } catch (e) {
+        return res.status(500).json({
+            message: "Some Internal Server Error Occuered",
+            error: e
         })
     }
 })

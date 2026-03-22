@@ -86,7 +86,7 @@ app.post("/add-user", requireAuth(), async (req: Request, res: Response) => {
 });
 
 // Protected API routes
-app.use("/github", requireAuth(), githubRoutes);
+app.use("/github", githubRoutes);
 app.use("/deploy", requireAuth(), deployProjectRoutes);
 app.use("/domain", requireAuth(), domainRoutes);
 app.use("/projects", requireAuth(), projectRoutes);

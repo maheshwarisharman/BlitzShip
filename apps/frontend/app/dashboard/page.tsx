@@ -6,8 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Search, Github, MoreHorizontal, ExternalLink } from "lucide-react";
 import axios from "axios"
 import  {useEffect, useState} from "react"
+import { useAuth } from "@clerk/nextjs"
 
 export default function DashboardPage() {
+    const { getToken } = useAuth();
 
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL
 
@@ -15,7 +17,12 @@ export default function DashboardPage() {
 
 
     const fetchProject = async () => {
-        const projects = await axios.get(`https://nonstimulative-donnetta-horotelic.ngrok-free.dev/projects/all`)
+        const token = await getToken();
+        const projects = await axios.get(`${API_BASE_URL}/projects/all`, {
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
+        })
         setProjects(projects.data.data)
     }
 
