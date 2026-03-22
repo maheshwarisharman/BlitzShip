@@ -30,6 +30,25 @@ export default function DashboardPage() {
       fetchProject()
     }, [])
 
+    const handleAddNewProject = async () => {
+        try {
+            const token = await getToken();
+            const response = await axios.get(`${API_BASE_URL}/github/is-github-linked`, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            })
+            console.log(response.data)
+            if(response.data.success) {
+                
+            } else {
+              
+            }
+        } catch (error) {
+            console.error("Error checking github link:", error)
+        }
+    }
+
   return (
     <div className="flex flex-col gap-8 w-full">
       {/* Top action row */}
@@ -41,7 +60,7 @@ export default function DashboardPage() {
             className="w-full sm:w-80 pl-9 h-10 border-border bg-background" 
           />
         </div>
-        <Button className="h-10 px-4 bg-foreground text-background hover:bg-neutral-200 font-medium w-full sm:w-auto">
+        <Button onClick={handleAddNewProject} className="h-10 px-4 bg-foreground text-background hover:bg-neutral-200 font-medium w-full sm:w-auto">
           Add New...
         </Button>
       </div>

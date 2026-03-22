@@ -67,10 +67,18 @@ async function getInstallationAccessToken(installationId: string): Promise<strin
  *
  * Expects: { user_id: string, code: string }
  */
-router.post('/auth/callback', async (req: Request, res: Response) => {
-    const { user_id, code } = req.body
+router.post('/auth/callback', requireAuth(), async (req: Request, res: Response) => {
+    const auth = getAuth(req);
+    const clerkUserId = auth.userId;
 
-    if (!user_id || !code) {
+    if (!clerkUserId) {
+        return res.status(401).json({
+            message: "Unauthorized",
+        });
+    }
+    const { code } = req.body
+
+    if (!code) {
         return res.status(400).json({
             success: false,
             error: 'user_id and code are required'
@@ -111,16 +119,40 @@ router.post('/auth/callback', async (req: Request, res: Response) => {
         const githubUsername: string = ghUser.data.login
         const githubUserId: string = String(ghUser.data.id)
 
-        // 3. Update the existing user row with their GitHub identity
+        // 3. Check for a pending installation that arrived before this OAuth flow completed.
+        //    This handles the race condition where GitHub fires the `installation` webhook
+        //    before we have had a chance to write github_username to the User row.
+        const pendingInstallation = await prisma.githubInstallationPending.findUnique({
+            where: { github_username: githubUsername }
+        })
+
+        if (pendingInstallation) {
+            console.log(`[github-oauth] Found pending installation ${pendingInstallation.installation_id} for ${githubUsername} — merging`)
+        }
+
+        // 4. Write GitHub identity (and optionally merge the pending installation_id)
+        //    in a single atomic update so there is no window where github_username is
+        //    set but github_installation_id is not.
         const user = await prisma.user.update({
-            where: { id: user_id },
+            where: { id: clerkUserId },
             data: {
                 github_username: githubUsername,
-                github_user_id: githubUserId
+                github_user_id: githubUserId,
+                ...(pendingInstallation
+                    ? { github_installation_id: pendingInstallation.installation_id }
+                    : {})
             }
         })
 
-        console.log(`[github-oauth] Linked GitHub user ${githubUsername} (id: ${githubUserId}) to user ${user_id}`)
+        // 5. Clean up the pending buffer row now that the user row is fully linked.
+        if (pendingInstallation) {
+            await prisma.githubInstallationPending.delete({
+                where: { github_username: githubUsername }
+            })
+            console.log(`[github-oauth] Pending installation ${pendingInstallation.installation_id} merged and cleaned up for user ${clerkUserId}`)
+        }
+
+        console.log(`[github-oauth] Linked GitHub user ${githubUsername} (id: ${githubUserId}) to user ${clerkUserId}`)
 
         return res.status(200).json({
             success: true,
@@ -190,7 +222,6 @@ router.get('/is-github-linked', requireAuth(), async(req: Request, res: Response
 router.post('/webhook', async (req: Request, res: Response) => {
     const event = req.headers['x-github-event'] as string
     const { action, installation, sender } = req.body
-    const senderGithubUserId = String(sender.id)
 
     try {
         // We only care about installation-related events
@@ -199,45 +230,58 @@ router.post('/webhook', async (req: Request, res: Response) => {
             const githubUsername = sender.login as string
 
             if (action === 'created') {
-                // User installed the GitHub App → store their installation_id
                 console.log(`[github-app] Installation created by ${githubUsername}, installation_id: ${installationId}`)
 
-                await prisma.user.updateMany({
-                    where: {
-                        github_user_id: senderGithubUserId
-                    },
-                    data: {
-                        github_installation_id: installationId
-                    }
+                // ── Fast path: user already completed OAuth (e.g. re-installing the app).
+                //    Try to update the User row directly using github_username as the key.
+                //    github_username is set by /auth/callback and is unique per user.
+                const result = await prisma.user.updateMany({
+                    where:  { github_username: githubUsername },
+                    data:   { github_installation_id: installationId }
                 })
 
-                return res.status(200).json({
-                    success: true,
-                    message: 'Installation recorded'
+                if (result.count > 0) {
+                    // Found and updated the user — we're done.
+                    console.log(`[github-app] Installation recorded directly for ${githubUsername}`)
+                    return res.status(200).json({ success: true, message: 'Installation recorded' })
+                }
+
+                // ── Slow path: /auth/callback hasn't written github_username yet (race condition).
+                //    Upsert into the pending buffer so /auth/callback can merge it later.
+                //    Upsert handles the case where a previous install event already exists
+                //    (e.g. GitHub retries the webhook delivery).
+                await prisma.githubInstallationPending.upsert({
+                    where:  { github_username: githubUsername },
+                    update: { installation_id: installationId },
+                    create: { github_username: githubUsername, installation_id: installationId }
                 })
+
+                console.log(`[github-app] No linked user found for ${githubUsername} yet — stored in pending buffer`)
+                return res.status(200).json({ success: true, message: 'Installation pending user link' })
             }
 
             if (action === 'deleted') {
-                // User uninstalled the GitHub App → remove their installation_id
                 console.log(`[github-app] Installation deleted by ${githubUsername}, installation_id: ${installationId}`)
 
+                // Remove the installation from the User row.
                 await prisma.user.updateMany({
-                    where: {
-                        github_installation_id: installationId
-                    },
-                    data: {
-                        github_installation_id: null
-                    }
+                    where: { github_installation_id: installationId },
+                    data:  { github_installation_id: null }
                 })
 
-                return res.status(200).json({
-                    success: true,
-                    message: 'Installation removed'
+                // Also purge any orphaned pending record for this username.
+                // This guards against the edge case where a user installed → webhook fired
+                // → was stored in pending → then immediately uninstalled before OAuth finished.
+                await prisma.githubInstallationPending.deleteMany({
+                    where: { github_username: githubUsername }
                 })
+
+                console.log(`[github-app] Installation removed for ${githubUsername}`)
+                return res.status(200).json({ success: true, message: 'Installation removed' })
             }
         }
 
-        // Acknowledge all other events with a 200
+        // Acknowledge all other events with a 200 so GitHub does not retry them.
         return res.status(200).json({ success: true, message: 'Event received' })
 
     } catch (e) {
