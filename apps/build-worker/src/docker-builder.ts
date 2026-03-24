@@ -77,7 +77,7 @@ export async function runBuildInContainer(job: BuildJob) {
 
     //Run the Actual Build CMD
     await dockerExec(containerId, [
-      'npm', 'run', job.buildCommand,
+      job.buildCommand,
       '--prefix', repoDir,
     ], onLog)
 
@@ -125,7 +125,7 @@ export async function runBuildInContainer(job: BuildJob) {
   } finally {
 
     await writeLogsToDB(job.id, buildLogs)
-    await cleanupContainer(containerId);
+    // await cleanupContainer(containerId);
 
   }
 

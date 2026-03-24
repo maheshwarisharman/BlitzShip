@@ -12,7 +12,7 @@ const sqs = new SQSClient({ region: process.env.AWS_REGION });
 const QUEUE_URL = process.env.SQS_QUEUE_URL!;
 const POLL_INTERVAL_MS = 5_000;
 const VISIBILITY_TIMEOUT = 900;
-const PRIMARY_BACKEND_URL = process.env.PRIMARY_BACKEND_URL || 'http://localhost:3000';
+const PRIMARY_BACKEND_URL = process.env.PRIMARY_BACKEND_URL || 'http://localhost:4000';
 
 export async function startBuildConsumer(): Promise<never> {
     console.log(`[sqs] Polling queue: ${QUEUE_URL}`);
