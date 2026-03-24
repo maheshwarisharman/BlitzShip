@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Github, MoreHorizontal, ExternalLink, Loader2, AlertCircle } from "lucide-react";
+import { Search, Github, MoreHorizontal, ExternalLink, Loader2, AlertCircle, X } from "lucide-react";
 import axios from "axios"
 import  {useEffect, useState} from "react"
 import { useAuth } from "@clerk/nextjs"
@@ -32,8 +32,11 @@ export default function DashboardPage() {
         repoName: "",
         build_branch: "main",
         primary_domain: "",
-        project_envs: []
+        project_envs: [] as { key: string, value: string }[]
     })
+
+    const [envKey, setEnvKey] = useState("")
+    const [envVal, setEnvVal] = useState("")
 
 
     const fetchProject = async () => {
@@ -99,8 +102,28 @@ export default function DashboardPage() {
             primary_domain: "",
             project_envs: []
         });
+        setEnvKey("");
+        setEnvVal("");
         setIsModalOpen(false); // Close repos modal
         setConfigModalOpen(true); // Open config modal
+    }
+
+    const handleAddEnv = () => {
+        if (envKey.trim() && envVal.trim()) {
+            setProjectConfig(prev => ({
+                ...prev,
+                project_envs: [...prev.project_envs, { key: envKey.trim(), value: envVal.trim() }]
+            }))
+            setEnvKey("")
+            setEnvVal("")
+        }
+    }
+
+    const handleRemoveEnv = (index: number) => {
+        setProjectConfig(prev => ({
+            ...prev,
+            project_envs: prev.project_envs.filter((_, i) => i !== index)
+        }))
     }
 
   return (
@@ -280,6 +303,55 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 </div>
+                <div className="mt-2 border border-border rounded-lg bg-background p-4 flex flex-col gap-4">
+                  <h3 className="text-sm font-semibold tracking-tight">Environment Variables</h3>
+                  
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-start gap-2">
+                        <div className="w-1/3 flex flex-col gap-2">
+                          <label className="text-xs font-medium text-muted-foreground w-full">KEY</label>
+                          <Input 
+                            value={envKey} 
+                            onChange={(e) => setEnvKey(e.target.value)} 
+                            className="border-border bg-neutral-900/50 font-mono text-sm h-9 w-full" 
+                            placeholder="EXAMPLE_NAME"
+                          />
+                        </div>
+                        <div className="flex-1 flex flex-col gap-2">
+                          <label className="text-xs font-medium text-muted-foreground w-full">VALUE</label>
+                          <Input 
+                            value={envVal} 
+                            onChange={(e) => setEnvVal(e.target.value)} 
+                            className="border-border bg-neutral-900/50 font-mono text-sm h-9 w-full" 
+                            placeholder="some_db_url:8080"
+                          />
+                        </div>
+                        <Button 
+                          variant="secondary" 
+                          onClick={handleAddEnv} 
+                          className="mt-6 h-9" 
+                          disabled={!envKey.trim() || !envVal.trim()}
+                        >
+                          Add
+                        </Button>
+                    </div>
+
+                    {projectConfig.project_envs.length > 0 && (
+                      <div className="flex flex-col gap-2 mt-2">
+                        {projectConfig.project_envs.map((env, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <div className="w-1/3 bg-neutral-900/50 border border-border rounded-md px-3 py-1.5 text-sm font-mono truncate">{env.key}</div>
+                            <div className="flex-1 bg-neutral-900/50 border border-border rounded-md px-3 py-1.5 text-sm font-mono truncate">{env.value}</div>
+                            <Button variant="ghost" size="icon" onClick={() => handleRemoveEnv(idx)} className="h-8 w-8 text-muted-foreground hover:text-red-500 shrink-0">
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
               </div>
 
               <div className="flex justify-end gap-3 pt-4">
