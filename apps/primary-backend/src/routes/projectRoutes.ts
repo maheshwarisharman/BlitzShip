@@ -36,6 +36,46 @@ router.get('/all', async (req, res) => {
     }
 })
 
+router.post('/single', async (req, res) => {
+    const auth = getAuth(req);
+    const clerkUserId = auth.userId;
+
+    if (!clerkUserId) {
+        return res.status(401).json({
+            message: "Unauthorized",
+        });
+    }
+
+    if(!req.body.project_id) {
+        return res.status(401).json({
+            message: "project_id is required"
+        })
+    }
+
+    try {
+        const project = await prisma.project.findUnique({
+            where: {
+                project_id: req.body.project_id
+            }
+        })
+        if(project?.user_id !== clerkUserId) {
+            return res.status(401).json({
+                message: "Unauthorized",
+            });
+        }
+        res.status(200).json({
+            message: "Project fetched successfully",
+            data: project
+        })
+    } catch (e) {
+        console.log(e)
+        res.status(500).json({
+            message: "Some error occured",
+            error: e
+        })
+    }
+})
+
 
 router.delete('/delete', async (req, res) => {
 
