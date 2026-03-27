@@ -66,18 +66,37 @@ router.post('/create-project', validate(createNewProjectSchema), async (req, res
 router.post('/create-deployment', validate(createDeploymentSchema), async (req, res) => {
 
     const body = req.body
-    console.log(body);
-    
+
+    const auth = getAuth(req);
+    const clerkUserId = auth.userId;
+
+    if (!clerkUserId) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+    if (!body.project_id) {
+        return res.status(400).json({
+            message: "Project Id is requried"
+        })
+    }
+
     try {
+
+        const project = await prisma.project.findUniqueOrThrow({
+            where: { project_id: body.project_id }
+        })
+
+        if(project.user_id !== clerkUserId) {
+            return res.status(401).json({
+                message: "Unauthorized",
+            })
+        }
 
         const deployment = await prisma.deployment.create({
             data: {
                 project_id: body.project_id,
             }
-        })
-
-        const project = await prisma.project.findUniqueOrThrow({
-            where: { project_id: body.project_id }
         })
 
         const envVars: Record<string, string> = project.project_env

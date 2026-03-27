@@ -6,7 +6,7 @@ import { useAuth } from "@clerk/nextjs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Github, ExternalLink, GitBranch, Terminal, Globe, Loader2, ArrowLeft, ArrowUpRight, Activity, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Github, ExternalLink, GitBranch, Terminal, Globe, Loader2, ArrowLeft, ArrowUpRight, Activity, CheckCircle, XCircle, Clock, Rocket } from "lucide-react";
 import Link from "next/link";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
@@ -18,6 +18,7 @@ export default function ProjectDetailsPage() {
     const [project, setProject] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isDeploying, setIsDeploying] = useState(false);
 
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -53,6 +54,27 @@ export default function ProjectDetailsPage() {
 
         fetchProject();
     }, [params.project_id, getToken, API_BASE_URL]);
+
+    const handleDeploy = async () => {
+        if (!params.project_id) return;
+        try {
+            setIsDeploying(true);
+            const token = await getToken();
+            await axios.post(`${API_BASE_URL}/deploy/create-deployment`, {
+                project_id: Number(params.project_id)
+            }, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+            window.location.reload();
+        } catch (err: any) {
+            console.error("Error triggering deployment:", err);
+            alert("Failed to trigger deployment: " + (err?.response?.data?.message || err?.message || "Unknown error"));
+        } finally {
+            setIsDeploying(false);
+        }
+    };
 
     if (isLoading) {
         return (
@@ -122,6 +144,18 @@ export default function ProjectDetailsPage() {
                     </div>
                     
                     <div className="flex items-center gap-3 shrink-0">
+                        <Button 
+                            onClick={handleDeploy}
+                            disabled={isDeploying}
+                            className="h-9 whitespace-nowrap bg-blue-600 hover:bg-blue-700 text-white font-medium border border-transparent shadow-sm"
+                        >
+                            {isDeploying ? (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin opacity-70" />
+                            ) : (
+                                <Rocket className="w-4 h-4 mr-2 opacity-70" />
+                            )}
+                            {isDeploying ? "Deploying..." : "Trigger Deployment"}
+                        </Button>
                         <a href={project.github_url} target="_blank" rel="noreferrer">
                             <Button variant="outline" className="h-9 whitespace-nowrap">
                                 <Github className="w-4 h-4 mr-2" />
