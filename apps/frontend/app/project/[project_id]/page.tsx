@@ -27,6 +27,8 @@ import {
   Clock,
   Rocket,
   Plus,
+  Copy,
+  Check,
 } from "lucide-react";
 
 import {
@@ -100,6 +102,7 @@ export default function ProjectDetailsPage() {
   const [domainError, setDomainError] = useState<string | null>(null);
   const [customDomains, setCustomDomains] = useState<CustomDomain[]>([]);
   const [isLoadingCustomDomains, setIsLoadingCustomDomains] = useState(false);
+  const [copiedValue, setCopiedValue] = useState<string | null>(null);
 
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -187,6 +190,17 @@ export default function ProjectDetailsPage() {
     CDN_UPDATING: "bg-purple-500/10 text-purple-400 border-purple-500/20",
     ACTIVE: "bg-green-500/10 text-green-500 border-green-500/20",
     FAILED: "bg-red-500/10 text-red-500 border-red-500/20",
+  };
+
+  const handleCopy = async (value: string, key: string) => {
+    if (!value || value === "Pending") return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedValue(key);
+      setTimeout(() => setCopiedValue(null), 1500);
+    } catch (err) {
+      console.error("Failed to copy DNS value:", err);
+    }
   };
 
   const handleAddCustomDomain = async (e: FormEvent<HTMLFormElement>) => {
@@ -568,7 +582,7 @@ export default function ProjectDetailsPage() {
               )}
             </form>
 
-            <div className="border-t border-border pt-4">
+            <div className="border-t border-border pt-6 mt-2">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-medium text-muted-foreground">
                   CUSTOM DOMAINS
@@ -601,7 +615,7 @@ export default function ProjectDetailsPage() {
                   {customDomains.map((domainItem) => (
                     <div
                       key={domainItem.id}
-                      className="rounded-lg border border-border p-3 bg-neutral-900/20"
+                      className="rounded-xl border border-border p-5 bg-neutral-900/20"
                     >
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                         <a
@@ -622,11 +636,11 @@ export default function ProjectDetailsPage() {
                       </div>
 
                       {domainItem.status === "AWAITING_DNS" && (
-                        <div className="mt-3 rounded-md border border-yellow-500/20 bg-yellow-500/5 p-3">
-                          <p className="text-xs text-yellow-500 font-medium mb-2">
+                        <div className="mt-4 rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-5">
+                          <p className="text-xs text-yellow-500 font-medium mb-3">
                             DNS configuration required
                           </p>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
                             <div className="text-muted-foreground">TYPE</div>
                             <div className="text-muted-foreground">NAME</div>
                             <div className="text-muted-foreground">VALUE</div>
@@ -634,11 +648,53 @@ export default function ProjectDetailsPage() {
                             <div className="font-mono text-foreground">
                               CNAME
                             </div>
-                            <div className="font-mono text-foreground break-all">
-                              {domainItem.cert_cname_key || "Pending"}
+                            <div className="font-mono text-foreground break-all flex items-start gap-2">
+                              <span className="break-all flex-1">
+                                {domainItem.cert_cname_key || "Pending"}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+                                onClick={() =>
+                                  handleCopy(
+                                    domainItem.cert_cname_key || "Pending",
+                                    `${domainItem.id}-name`,
+                                  )
+                                }
+                                disabled={!domainItem.cert_cname_key}
+                              >
+                                {copiedValue === `${domainItem.id}-name` ? (
+                                  <Check className="w-3.5 h-3.5 text-green-500" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </Button>
                             </div>
-                            <div className="font-mono text-foreground break-all">
-                              {domainItem.cert_cname_value || "Pending"}
+                            <div className="font-mono text-foreground break-all flex items-start gap-2">
+                              <span className="break-all flex-1">
+                                {domainItem.cert_cname_value || "Pending"}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+                                onClick={() =>
+                                  handleCopy(
+                                    domainItem.cert_cname_value || "Pending",
+                                    `${domainItem.id}-value`,
+                                  )
+                                }
+                                disabled={!domainItem.cert_cname_value}
+                              >
+                                {copiedValue === `${domainItem.id}-value` ? (
+                                  <Check className="w-3.5 h-3.5 text-green-500" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </Button>
                             </div>
                           </div>
                         </div>
