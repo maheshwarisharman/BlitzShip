@@ -29,6 +29,8 @@ import {
   Plus,
   Copy,
   Check,
+  AlertTriangle,
+  Trash2,
 } from "lucide-react";
 
 import {
@@ -103,6 +105,11 @@ export default function ProjectDetailsPage() {
   const [customDomains, setCustomDomains] = useState<CustomDomain[]>([]);
   const [isLoadingCustomDomains, setIsLoadingCustomDomains] = useState(false);
   const [copiedValue, setCopiedValue] = useState<string | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState("");
+  const [deleteConfirmPhrase, setDeleteConfirmPhrase] = useState("");
+  const [isDeletingProject, setIsDeletingProject] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -274,6 +281,44 @@ export default function ProjectDetailsPage() {
       alert("Failed to trigger deployment: " + message);
     } finally {
       setIsDeploying(false);
+    }
+  };
+
+  const canDeleteProject =
+    project?.name?.trim().toLowerCase() ===
+      deleteConfirmName.trim().toLowerCase() &&
+    deleteConfirmPhrase.trim().toLowerCase() === "delete my project";
+
+  const handleDeleteProject = async () => {
+    if (!params.project_id || !project || !canDeleteProject) return;
+
+    setIsDeletingProject(true);
+    setDeleteError(null);
+
+    try {
+      const token = await getToken();
+      await axios.delete(`${API_BASE_URL}/projects/delete`, {
+        data: {
+          project_id: Number(params.project_id),
+        },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      setIsDeleteModalOpen(false);
+      router.push("/dashboard");
+    } catch (err: unknown) {
+      console.error("Error deleting project:", err);
+      const message = axios.isAxiosError(err)
+        ? (err.response?.data as { message?: string } | undefined)?.message ||
+          err.message
+        : err instanceof Error
+          ? err.message
+          : "Failed to delete project.";
+      setDeleteError(message);
+    } finally {
+      setIsDeletingProject(false);
     }
   };
 
@@ -635,70 +680,64 @@ export default function ProjectDetailsPage() {
                         </Badge>
                       </div>
 
-                      {domainItem.status === "AWAITING_DNS" && (
-                        <div className="mt-4 rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-5">
-                          <p className="text-xs text-yellow-500 font-medium mb-3">
-                            DNS configuration required
-                          </p>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-                            <div className="text-muted-foreground">TYPE</div>
-                            <div className="text-muted-foreground">NAME</div>
-                            <div className="text-muted-foreground">VALUE</div>
+                      <div className="mt-4 rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-5">
+                        <p className="text-xs text-yellow-500 font-medium mb-3">
+                          DNS configuration required
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                          <div className="text-muted-foreground">TYPE</div>
+                          <div className="text-muted-foreground">NAME</div>
+                          <div className="text-muted-foreground">VALUE</div>
 
-                            <div className="font-mono text-foreground">
-                              CNAME
-                            </div>
-                            <div className="font-mono text-foreground break-all flex items-start gap-2">
-                              <span className="break-all flex-1">
-                                {domainItem.cert_cname_key || "Pending"}
-                              </span>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
-                                onClick={() =>
-                                  handleCopy(
-                                    domainItem.cert_cname_key || "Pending",
-                                    `${domainItem.id}-name`,
-                                  )
-                                }
-                                disabled={!domainItem.cert_cname_key}
-                              >
-                                {copiedValue === `${domainItem.id}-name` ? (
-                                  <Check className="w-3.5 h-3.5 text-green-500" />
-                                ) : (
-                                  <Copy className="w-3.5 h-3.5" />
-                                )}
-                              </Button>
-                            </div>
-                            <div className="font-mono text-foreground break-all flex items-start gap-2">
-                              <span className="break-all flex-1">
-                                {domainItem.cert_cname_value || "Pending"}
-                              </span>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
-                                onClick={() =>
-                                  handleCopy(
-                                    domainItem.cert_cname_value || "Pending",
-                                    `${domainItem.id}-value`,
-                                  )
-                                }
-                                disabled={!domainItem.cert_cname_value}
-                              >
-                                {copiedValue === `${domainItem.id}-value` ? (
-                                  <Check className="w-3.5 h-3.5 text-green-500" />
-                                ) : (
-                                  <Copy className="w-3.5 h-3.5" />
-                                )}
-                              </Button>
-                            </div>
+                          <div className="font-mono text-foreground">CNAME</div>
+                          <div className="font-mono text-foreground break-all flex items-start gap-2">
+                            <span className="break-all flex-1">
+                              {domainItem.domain}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+                              onClick={() =>
+                                handleCopy(
+                                  domainItem.domain,
+                                  `${domainItem.id}-name`,
+                                )
+                              }
+                            >
+                              {copiedValue === `${domainItem.id}-name` ? (
+                                <Check className="w-3.5 h-3.5 text-green-500" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </Button>
+                          </div>
+                          <div className="font-mono text-foreground break-all flex items-start gap-2">
+                            <span className="break-all flex-1">
+                              d16mcb60so9xo3.cloudfront.net
+                            </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+                              onClick={() =>
+                                handleCopy(
+                                  "d16mcb60so9xo3.cloudfront.net",
+                                  `${domainItem.id}-value`,
+                                )
+                              }
+                            >
+                              {copiedValue === `${domainItem.id}-value` ? (
+                                <Check className="w-3.5 h-3.5 text-green-500" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </Button>
                           </div>
                         </div>
-                      )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -873,6 +912,144 @@ export default function ProjectDetailsPage() {
                 </p>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Danger Zone */}
+        <Card className="col-span-1 md:col-span-3 bg-background border-red-500/30 shadow-sm">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg font-semibold text-red-500 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" />
+              Danger Zone
+            </CardTitle>
+            <CardDescription>
+              Deleting this project is permanent and cannot be undone.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-t border-red-500/20 pt-4">
+            <div className="text-sm text-muted-foreground">
+              Delete{" "}
+              <span className="font-semibold text-foreground">
+                {project.name}
+              </span>{" "}
+              and all its deployment history.
+            </div>
+            <Dialog
+              open={isDeleteModalOpen}
+              onOpenChange={(open) => {
+                setIsDeleteModalOpen(open);
+                if (!open) {
+                  setDeleteConfirmName("");
+                  setDeleteConfirmPhrase("");
+                  setDeleteError(null);
+                }
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button variant="destructive" className="h-9 whitespace-nowrap">
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Project
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-xl bg-[#0a0a0a] border-neutral-800 p-0 overflow-hidden sm:rounded-2xl">
+                <div className="p-6">
+                  <DialogHeader className="gap-4">
+                    <DialogTitle className="text-2xl font-bold text-white">
+                      Delete Project
+                    </DialogTitle>
+                    <DialogDescription className="text-neutral-300 text-[15px] leading-relaxed">
+                      This will permanently delete the project and related
+                      resources like Deployments, Domains and Environment
+                      Variables.
+                    </DialogDescription>
+                  </DialogHeader>
+                </div>
+
+                <div className="border-t border-neutral-800 p-6 flex flex-col gap-6">
+                  <div className="flex flex-col gap-2.5">
+                    <label
+                      htmlFor="delete-project-confirm-name"
+                      className="text-[15px] text-neutral-200"
+                    >
+                      To confirm, type{" "}
+                      <span className="font-semibold">
+                        &ldquo;{project.name}&rdquo;
+                      </span>
+                    </label>
+                    <Input
+                      id="delete-project-confirm-name"
+                      value={deleteConfirmName}
+                      onChange={(e) => {
+                        setDeleteConfirmName(e.target.value);
+                        if (deleteError) setDeleteError(null);
+                      }}
+                      className="h-11 border-neutral-800 bg-black text-white text-[15px] focus-visible:ring-1 focus-visible:ring-neutral-700 rounded-lg"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-2.5">
+                    <label
+                      htmlFor="delete-project-confirm-phrase"
+                      className="text-[15px] text-neutral-200"
+                    >
+                      To confirm, type{" "}
+                      <span className="font-semibold">
+                        &ldquo;delete my project&rdquo;
+                      </span>
+                    </label>
+                    <Input
+                      id="delete-project-confirm-phrase"
+                      value={deleteConfirmPhrase}
+                      onChange={(e) => {
+                        setDeleteConfirmPhrase(e.target.value);
+                        if (deleteError) setDeleteError(null);
+                      }}
+                      className="h-11 border-neutral-800 bg-black text-white text-[15px] focus-visible:ring-1 focus-visible:ring-neutral-700 rounded-lg"
+                    />
+                  </div>
+                </div>
+
+                <div className="border-t border-neutral-800 p-6">
+                  <div className="bg-[#291415] border border-[#5c1c24] rounded-lg p-4 flex items-center gap-3 text-[#ff4d4d]">
+                    <AlertTriangle className="w-5 h-5 shrink-0" />
+                    <p className="text-[15px]">
+                      Deleting {project.name} cannot be undone.
+                    </p>
+                  </div>
+                  {deleteError && (
+                    <p className="text-sm text-red-500 mt-4">{deleteError}</p>
+                  )}
+                </div>
+
+                <div className="border-t border-neutral-800 p-4 sm:px-6 flex items-center justify-between bg-[#0a0a0a]">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="border-neutral-700 hover:bg-neutral-800 hover:text-white bg-transparent h-10 px-5 text-[15px] rounded-lg"
+                    onClick={() => {
+                      setIsDeleteModalOpen(false);
+                      setDeleteConfirmName("");
+                      setDeleteConfirmPhrase("");
+                      setDeleteError(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    className="h-10 px-5 bg-[#e5484d] hover:bg-[#c93f44] text-white text-[15px] font-medium border-0 rounded-lg"
+                    disabled={!canDeleteProject || isDeletingProject}
+                    onClick={handleDeleteProject}
+                  >
+                    {isDeletingProject && (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    )}
+                    {isDeletingProject ? "Deleting..." : "Delete Project"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </CardContent>
         </Card>
       </div>
