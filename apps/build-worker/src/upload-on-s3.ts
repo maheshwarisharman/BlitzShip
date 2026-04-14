@@ -28,12 +28,14 @@ async function uploadFile(filePath: string, baseDir: string, s3Prefix: number, b
     const relativePath = path.relative(baseDir, filePath)
     const s3Key = `${s3Prefix}/${relativePath}`.replace(/\\/g, '/')
     const contentType = mimeLookup(filePath) || 'application/octet-stream'
+    const {size} = await stat(filePath)
 
     await s3.send(new PutObjectCommand({
         Bucket: bucket,
         Key: s3Key,
         Body: createReadStream(filePath),
         ContentType: contentType,
+        ContentLength: size,
         CacheControl: filePath.endsWith('.html') ? 'no-cache' : 'max-age=31536000',
     }))
 }

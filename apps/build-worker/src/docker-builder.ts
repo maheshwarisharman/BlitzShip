@@ -77,8 +77,8 @@ export async function runBuildInContainer(job: BuildJob) {
 
     //Run the Actual Build CMD
     await dockerExec(containerId, [
-      job.buildCommand,
-      '--prefix', repoDir,
+      'sh', '-c',
+      `cd ${repoDir} && ${job.buildCommand}`,
     ], onLog)
 
 
