@@ -1,6 +1,6 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { createReadStream, type Dirent } from 'fs';
-import { readdir, stat } from 'fs/promises';
+import { readFile, readdir, stat } from 'fs/promises';
 import path from 'path';
 import { lookup as mimeLookup } from 'mime-types';
 import fs from 'fs/promises';
@@ -28,17 +28,18 @@ async function uploadFile(filePath: string, baseDir: string, s3Prefix: number, b
     const relativePath = path.relative(baseDir, filePath)
     const s3Key = `${s3Prefix}/${relativePath}`.replace(/\\/g, '/')
     const contentType = mimeLookup(filePath) || 'application/octet-stream'
-    const {size} = await stat(filePath)
+    const fileBuffer = await readFile(filePath)
 
     await s3.send(new PutObjectCommand({
         Bucket: bucket,
         Key: s3Key,
-        Body: createReadStream(filePath),
+        Body: fileBuffer,
         ContentType: contentType,
-        ContentLength: size,
+        ContentLength: fileBuffer.length,
         CacheControl: filePath.endsWith('.html') ? 'no-cache' : 'max-age=31536000',
     }))
 }
+
 
 
 async function getAllFiles(dir: string): Promise<string[]> {
