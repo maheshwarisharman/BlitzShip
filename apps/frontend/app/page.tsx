@@ -12,7 +12,7 @@ export default function Home() {
       <main className="relative z-10 max-w-2xl text-center flex flex-col items-center mt-[-10vh]">
 
         <h1 className="text-4xl md:text-6xl font-semibold tracking-tight mb-6">
-          Welcome To A Static React Deployment Website
+          Welcome To A BlitzShip React Deployment Website
         </h1>
         
         <p className="text-muted-foreground text-lg mb-8 max-w-[500px]">
@@ -28,7 +28,7 @@ export default function Home() {
 
       <footer className="absolute bottom-6 w-full text-center z-10">
         <p className="text-xs text-muted-foreground">
-          &copy; {new Date().getFullYear()} Acme Corp. All rights reserved.
+          &copy; {new Date().getFullYear()} BlitzShip. All rights reserved.
         </p>
       </footer>
     </div>

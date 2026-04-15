@@ -3,6 +3,8 @@ import Link from "next/link";
 import { Search, Bell, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import Image from "next/image";
+import blitzLogo from "../../assets/BlitzLogo icon only.png";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
 
@@ -15,24 +17,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* Left Area (Logo & Breadcrumbs) */}
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-2">
-              <svg className="h-6 w-6 text-foreground" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2L2 22H22L12 2Z" fill="currentColor" />
-              </svg>
+              <Image src={blitzLogo} alt="Blitz Logo" className="h-10 w-10 object-contain invert" />
             </Link>
-            
-            <svg viewBox="0 0 24 24" fill="none" className="w-8 h-8 text-neutral-800" xmlns="http://www.w3.org/2000/svg">
-                <path d="M16.88 3.549L7.12 20.451" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            
-            <div className="flex items-center gap-2 hover:bg-neutral-900 px-2 py-1 rounded-md cursor-pointer transition-colors">
-              <Avatar className="w-5 h-5">
-                <AvatarImage src="" />
-                <AvatarFallback className="text-[10px] bg-gradient-to-tr from-foreground to-muted-foreground text-background">usr</AvatarFallback>
-              </Avatar>
-              <span className="text-sm font-medium">personal</span>
-              <span className="bg-neutral-800 text-[11px] font-medium text-neutral-300 px-1.5 py-0.5 rounded-full ml-1">Hobby</span>
-              <ChevronDown className="w-4 h-4 text-muted-foreground ml-1" />
-            </div>
+            <h2 className="font-semibold">BlitzShip</h2>
           </div>
           
           {/* Right Area (Search & Auth) */}
