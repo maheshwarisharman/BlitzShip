@@ -32,6 +32,8 @@ import {
   AlertTriangle,
   Trash2,
   MoreVertical,
+  Settings,
+  X,
 } from "lucide-react";
 
 import {
@@ -112,6 +114,13 @@ export default function ProjectDetailsPage() {
   const [isDeletingProject, setIsDeletingProject] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isMarkingProduction, setIsMarkingProduction] = useState<number | null>(null);
+
+  // Env editor state
+  const [isEnvModalOpen, setIsEnvModalOpen] = useState(false);
+  const [envRows, setEnvRows] = useState<{ key: string; value: string }[]>([]);
+  const [isSavingEnv, setIsSavingEnv] = useState(false);
+  const [envSaveError, setEnvSaveError] = useState<string | null>(null);
+  const [isRedeployModalOpen, setIsRedeployModalOpen] = useState(false);
 
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -359,6 +368,57 @@ export default function ProjectDetailsPage() {
       alert("Failed to mark deployment as production: " + message);
     } finally {
       setIsMarkingProduction(null);
+    }
+  };
+
+  const openEnvManager = () => {
+    const existing = project?.project_env
+      ? Object.entries(project.project_env).map(([key, value]) => ({ key, value }))
+      : [];
+    setEnvRows(existing.length > 0 ? existing : [{ key: "", value: "" }]);
+    setEnvSaveError(null);
+    setIsEnvModalOpen(true);
+  };
+
+  const handleSaveEnv = async () => {
+    if (!params.project_id) return;
+
+    // Build env object, skip blank keys
+    const envObject: Record<string, string> = {};
+    for (const row of envRows) {
+      if (row.key.trim()) {
+        envObject[row.key.trim()] = row.value;
+      }
+    }
+
+    try {
+      setIsSavingEnv(true);
+      setEnvSaveError(null);
+      const token = await getToken();
+      await axios.put(
+        `${API_BASE_URL}/projects/env`,
+        { project_id: Number(params.project_id), env: envObject },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+
+      // Optimistically update local project state
+      if (project) {
+        setProject({ ...project, project_env: envObject });
+      }
+
+      setIsEnvModalOpen(false);
+      setIsRedeployModalOpen(true);
+    } catch (err: unknown) {
+      console.error("Error saving env variables:", err);
+      const message = axios.isAxiosError(err)
+        ? (err.response?.data as { message?: string } | undefined)?.message ||
+          err.message
+        : err instanceof Error
+          ? err.message
+          : "Failed to save environment variables.";
+      setEnvSaveError(message);
+    } finally {
+      setIsSavingEnv(false);
     }
   };
 
@@ -820,7 +880,13 @@ export default function ProjectDetailsPage() {
                 Variables applied to the environments for this project.
               </CardDescription>
             </div>
-            <Button variant="outline" size="sm" className="hidden sm:flex">
+            <Button
+              variant="outline"
+              size="sm"
+              className="hidden sm:flex gap-1.5"
+              onClick={openEnvManager}
+            >
+              <Settings className="w-3.5 h-3.5" />
               Manage
             </Button>
           </CardHeader>
@@ -853,10 +919,162 @@ export default function ProjectDetailsPage() {
                 <p className="text-sm text-muted-foreground">
                   No environment variables configured.
                 </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-4 gap-1.5"
+                  onClick={openEnvManager}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add Variables
+                </Button>
               </div>
             )}
           </CardContent>
         </Card>
+
+        {/* Env Editor Dialog */}
+        <Dialog open={isEnvModalOpen} onOpenChange={setIsEnvModalOpen}>
+          <DialogContent className="sm:max-w-2xl bg-[#0a0a0a] border-neutral-800 p-0 overflow-hidden sm:rounded-2xl">
+            <div className="p-6 border-b border-neutral-800">
+              <DialogHeader>
+                <DialogTitle className="text-xl font-bold text-white flex items-center gap-2">
+                  <Settings className="w-5 h-5" />
+                  Environment Variables
+                </DialogTitle>
+                <DialogDescription className="text-neutral-400">
+                  Add, edit, or remove environment variables for this project.
+                  Changes take effect on the next deployment.
+                </DialogDescription>
+              </DialogHeader>
+            </div>
+
+            <div className="p-6 flex flex-col gap-3 max-h-[55vh] overflow-y-auto">
+              {/* Column headers */}
+              <div className="grid grid-cols-[1fr_1fr_auto] gap-2 text-xs font-medium text-neutral-500 uppercase tracking-wider px-1">
+                <div>Key</div>
+                <div>Value</div>
+                <div className="w-8" />
+              </div>
+
+              {envRows.map((row, idx) => (
+                <div key={idx} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                  <Input
+                    id={`env-key-${idx}`}
+                    value={row.key}
+                    onChange={(e) => {
+                      const updated = [...envRows];
+                      updated[idx] = { ...updated[idx], key: e.target.value };
+                      setEnvRows(updated);
+                    }}
+                    placeholder="VARIABLE_NAME"
+                    className="h-9 font-mono text-sm border-neutral-800 bg-neutral-900 text-white placeholder:text-neutral-600 focus-visible:ring-1 focus-visible:ring-neutral-600"
+                  />
+                  <Input
+                    id={`env-value-${idx}`}
+                    value={row.value}
+                    onChange={(e) => {
+                      const updated = [...envRows];
+                      updated[idx] = { ...updated[idx], value: e.target.value };
+                      setEnvRows(updated);
+                    }}
+                    placeholder="value"
+                    className="h-9 font-mono text-sm border-neutral-800 bg-neutral-900 text-white placeholder:text-neutral-600 focus-visible:ring-1 focus-visible:ring-neutral-600"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 text-neutral-500 hover:text-red-400 hover:bg-red-500/10 shrink-0"
+                    onClick={() => setEnvRows(envRows.filter((_, i) => i !== idx))}
+                    disabled={envRows.length === 1}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="self-start mt-1 gap-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800"
+                onClick={() => setEnvRows([...envRows, { key: "", value: "" }])}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Variable
+              </Button>
+
+              {envSaveError && (
+                <p className="text-sm text-red-400 mt-2">{envSaveError}</p>
+              )}
+            </div>
+
+            <div className="border-t border-neutral-800 p-4 sm:px-6 flex items-center justify-between bg-[#0a0a0a]">
+              <Button
+                type="button"
+                variant="outline"
+                className="border-neutral-700 hover:bg-neutral-800 hover:text-white bg-transparent h-10 px-5 rounded-lg"
+                onClick={() => setIsEnvModalOpen(false)}
+                disabled={isSavingEnv}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="h-10 px-5 bg-blue-600 hover:bg-blue-700 text-white font-medium border-0 rounded-lg gap-2"
+                onClick={handleSaveEnv}
+                disabled={isSavingEnv}
+              >
+                {isSavingEnv && <Loader2 className="w-4 h-4 animate-spin" />}
+                {isSavingEnv ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Post-save redeploy confirmation Dialog */}
+        <Dialog open={isRedeployModalOpen} onOpenChange={setIsRedeployModalOpen}>
+          <DialogContent className="sm:max-w-md bg-[#0a0a0a] border-neutral-800 p-0 overflow-hidden sm:rounded-2xl">
+            <div className="p-6">
+              <DialogHeader className="gap-3">
+                <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center">
+                  <CheckCircle className="w-6 h-6 text-green-500" />
+                </div>
+                <DialogTitle className="text-xl font-bold text-white">
+                  Variables Updated!
+                </DialogTitle>
+                <DialogDescription className="text-neutral-400 text-[15px] leading-relaxed">
+                  Your environment variables were saved successfully. Redeploy
+                  the project for the changes to take effect.
+                </DialogDescription>
+              </DialogHeader>
+            </div>
+            <div className="border-t border-neutral-800 p-4 sm:px-6 flex items-center justify-between bg-[#0a0a0a]">
+              <Button
+                type="button"
+                variant="outline"
+                className="border-neutral-700 hover:bg-neutral-800 hover:text-white bg-transparent h-10 px-5 rounded-lg"
+                onClick={() => setIsRedeployModalOpen(false)}
+              >
+                Not now
+              </Button>
+              <Button
+                type="button"
+                className="h-10 px-5 bg-blue-600 hover:bg-blue-700 text-white font-medium border-0 rounded-lg gap-2"
+                disabled={isDeploying}
+                onClick={async () => {
+                  setIsRedeployModalOpen(false);
+                  await handleDeploy();
+                }}
+              >
+                {isDeploying && <Loader2 className="w-4 h-4 animate-spin" />}
+                {isDeploying ? "Deploying..." : "Redeploy Now"}
+                {!isDeploying && <Rocket className="w-4 h-4" />}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Deployments History */}
         <Card className="col-span-1 md:col-span-3 bg-background border-border shadow-sm">
