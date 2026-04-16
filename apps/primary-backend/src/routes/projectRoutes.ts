@@ -76,6 +76,67 @@ router.post("/single", async (req, res) => {
   }
 });
 
+router.put("/env", async (req, res) => {
+  const auth = getAuth(req);
+  const clerkUserId = auth.userId;
+
+  if (!clerkUserId) {
+    return res.status(401).json({
+      message: "Unauthorized",
+    });
+  }
+
+  const { project_id, env } = req.body;
+
+  if (!project_id) {
+    return res.status(400).json({
+      message: "project_id is required",
+    });
+  }
+
+  if (!env || typeof env !== "object" || Array.isArray(env)) {
+    return res.status(400).json({
+      message: "env must be a valid key-value object",
+    });
+  }
+
+  try {
+    // Verify ownership before updating
+    const project = await prisma.project.findUnique({
+      where: { project_id },
+      select: { user_id: true },
+    });
+
+    if (!project) {
+      return res.status(404).json({
+        message: "Project not found",
+      });
+    }
+
+    if (project.user_id !== clerkUserId) {
+      return res.status(403).json({
+        message: "Forbidden: you do not own this project",
+      });
+    }
+
+    const updated = await prisma.project.update({
+      where: { project_id },
+      data: { project_env: env },
+    });
+
+    res.status(200).json({
+      message: "Environment variables updated successfully",
+      data: { project_id: updated.project_id, project_env: updated.project_env },
+    });
+  } catch (e) {
+    console.log(e);
+    res.status(500).json({
+      message: "Some error occured",
+      error: e,
+    });
+  }
+});
+
 router.delete("/delete", async (req, res) => {
   try {
     const projectId = req.body.project_id;

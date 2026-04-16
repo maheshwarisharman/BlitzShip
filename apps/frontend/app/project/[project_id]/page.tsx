@@ -394,7 +394,7 @@ export default function ProjectDetailsPage() {
 
   const formatVisitUrl = (domain: string) => {
     if (!domain) return "";
-    return domain.startsWith("http") ? domain : `https://${domain}`;
+    return domain.startsWith("http") ? domain : `https://${domain}.dev.blitznative.com`;
   };
 
   return (
@@ -612,7 +612,7 @@ export default function ProjectDetailsPage() {
                   rel="noreferrer"
                   className="text-sm font-mono text-foreground hover:underline inline-flex items-center gap-1.5 w-fit"
                 >
-                  {project.primary_domain}
+                  {project.primary_domain}.dev.blitznative.com
                   <ExternalLink className="w-3.5 h-3.5 opacity-70" />
                 </a>
               ) : (
