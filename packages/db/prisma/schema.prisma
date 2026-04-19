@@ -72,7 +72,8 @@ model CustomDomain {
   domain            String              @unique
   deployment_id     Int?
   project_id        Int?
-  tenant_id         String?             // CloudFront Distribution Tenant ID
+  cert_arn          String?             // ACM Certificate ARN (requested on domain add)
+  tenant_id         String?             // CloudFront Distribution Tenant ID (set after cert is ISSUED)
   tenant_arn        String?             // CloudFront Distribution Tenant ARN
   status            CustomDomainStatus  @default(PENDING)
   created_at        DateTime            @default(now())
@@ -80,7 +81,7 @@ model CustomDomain {
 }
 
 enum CustomDomainStatus {
-  PENDING           // Tenant created, awaiting DNS + cert validation
-  ACTIVE            // DNS verified, cert issued, serving traffic
+  PENDING           // ACM cert requested, awaiting DNS validation + issuance
+  ACTIVE            // Cert issued, CF tenant created, serving traffic
   FAILED            // Something went wrong
 }

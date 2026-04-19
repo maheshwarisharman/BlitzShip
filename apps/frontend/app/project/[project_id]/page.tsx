@@ -582,7 +582,7 @@ export default function ProjectDetailsPage() {
                   rel="noreferrer"
                   className="text-sm font-medium hover:underline text-foreground flex items-center gap-1.5 group"
                 >
-                  {project.primary_domain || "Not configured"}
+                  {project.primary_domain || "Not configured"}.dev.blitznative.com
                   {project.primary_domain && (
                     <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                   )}
