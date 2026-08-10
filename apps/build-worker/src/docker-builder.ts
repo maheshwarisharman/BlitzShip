@@ -10,6 +10,8 @@ import { prisma } from '@repo/db'
 const BUILDER_IMAGE = 'build-worker:latest';
 const CONTAINER_WORKSPACE = '/workspace';
 
+const BUCKET: string = process.env.S3_BUCKET || 'blitzship'
+
 
 export async function runBuildInContainer(job: BuildJob) {
 
@@ -95,7 +97,7 @@ export async function runBuildInContainer(job: BuildJob) {
     console.log("Artifacts are copied to:- ", path.join(localArtifactPath, job.buildOutDir))
     const tmpPath = path.join(localArtifactPath, job.buildOutDir);
 
-    const uploadStatus = await uploadDirectoryToS3(tmpPath, job.id, 'vercelclone-test')
+    const uploadStatus = await uploadDirectoryToS3(tmpPath, job.id, BUCKET)
     if (uploadStatus) {
       await prisma.deployment.update({
         where: {
