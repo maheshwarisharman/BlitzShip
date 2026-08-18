@@ -5,7 +5,7 @@ import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
 const cache = new Map();
 const CACHE_TTL_MS = 90_000; // 90 seconds
 
-const PLATFORM_DOMAIN = 'dev.blitznative.com';
+const PLATFORM_DOMAIN = 'dev.blitzship.app';
 let DB_URL;
 
 async function getDBUrl() {
@@ -13,7 +13,7 @@ async function getDBUrl() {
     
     const ssm = new SSMClient({ region: 'us-east-1' });
     const { Parameter } = await ssm.send(new GetParameterCommand({
-        Name: '/devblitznative/DATABASE_URL',
+        Name: '/devblitzship/DATABASE_URL',
         WithDecryption: true
     }));
     DB_URL = Parameter.Value;
@@ -91,7 +91,7 @@ export const handler = async (event) => {
         return request;
     }
 
-    // PATH 2: named slug — "userapp.dev.blitznative.comn"
+    // PATH 2: named slug — "userapp.dev.blitzship.app"
     const isOurDomain = host.endsWith(PLATFORM_DOMAIN);
 
     if (isOurDomain) {
