@@ -10,7 +10,7 @@ import { prisma } from '@repo/db'
 const BUILDER_IMAGE = 'build-worker:latest';
 const CONTAINER_WORKSPACE = '/workspace';
 
-const BUCKET: string = process.env.S3_BUCKET || 'blitzship'
+const BUCKET: string = process.env.S3_BUCKET ?? 'blitzship'
 
 
 export async function runBuildInContainer(job: BuildJob) {
