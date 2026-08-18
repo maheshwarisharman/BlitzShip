@@ -454,7 +454,7 @@ export default function ProjectDetailsPage() {
 
   const formatVisitUrl = (domain: string) => {
     if (!domain) return "";
-    return domain.startsWith("http") ? domain : `https://${domain}.dev.blitznative.com`;
+    return domain.startsWith("http") ? domain : `https://${domain}.blitzship.app`;
   };
 
   return (
@@ -582,7 +582,7 @@ export default function ProjectDetailsPage() {
                   rel="noreferrer"
                   className="text-sm font-medium hover:underline text-foreground flex items-center gap-1.5 group"
                 >
-                  {project.primary_domain || "Not configured"}.dev.blitznative.com
+                  {project.primary_domain || "Not configured"}.blitzship.app
                   {project.primary_domain && (
                     <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                   )}
@@ -672,7 +672,7 @@ export default function ProjectDetailsPage() {
                   rel="noreferrer"
                   className="text-sm font-mono text-foreground hover:underline inline-flex items-center gap-1.5 w-fit"
                 >
-                  {project.primary_domain}.dev.blitznative.com
+                  {project.primary_domain}.blitzship.app
                   <ExternalLink className="w-3.5 h-3.5 opacity-70" />
                 </a>
               ) : (

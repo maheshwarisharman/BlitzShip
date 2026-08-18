@@ -433,7 +433,7 @@ export default function DashboardPage() {
                           {isCheckingDomain ? <Loader2 className="h-4 w-4 animate-spin" /> : "Check"}
                         </Button>
                       </div>
-                      <p className="text-[14px]">https://<span className="font-semibold">{projectConfig.primary_domain}</span>.dev.blitznative.com</p>
+                      <p className="text-[14px]">https://<span className="font-semibold">{projectConfig.primary_domain}</span>.blitzship.app</p>
                       {domainAvailable === true && (
                         <span className="text-xs text-green-500 font-medium flex items-center gap-1">
                           <Check className="w-3.5 h-3.5" /> Domain is available

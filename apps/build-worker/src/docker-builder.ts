@@ -105,7 +105,7 @@ export async function runBuildInContainer(job: BuildJob) {
         },
         data: {
           is_build_success: true,
-          preview_url: `https://${job.id}.dev.blitznative.com`
+          preview_url: `https://${job.id}.blitzship.app`
         }
       })
       return console.log("Directly Uploaded to s3 successfully!")
