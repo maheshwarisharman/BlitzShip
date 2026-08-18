@@ -26,7 +26,7 @@ export async function uploadDirectoryToS3(localDir: string, s3Prefix: number, bu
 
 async function uploadFile(filePath: string, baseDir: string, s3Prefix: number, bucket: string) {
     const relativePath = path.relative(baseDir, filePath)
-    const s3Key = `${s3Prefix}/${relativePath}`.replace(/\\/g, '/')
+    const s3Key = `deployments/${s3Prefix}/${relativePath}`.replace(/\\/g, '/')
     const contentType = mimeLookup(filePath) || 'application/octet-stream'
     const fileBuffer = await readFile(filePath)
 

@@ -5,7 +5,7 @@ import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
 const cache = new Map();
 const CACHE_TTL_MS = 90_000; // 90 seconds
 
-const PLATFORM_DOMAIN = 'dev.blitzship.app';
+const PLATFORM_DOMAIN = 'blitzship.app';
 let DB_URL;
 
 async function getDBUrl() {
@@ -82,7 +82,7 @@ export const handler = async (event) => {
     const uri = request.uri;
     const sql = neon(url);
 
-    // PATH 1: raw deployment ID — host is like "14.dev.blitznative.com"
+    // PATH 1: raw deployment ID — host is like "14.blitzship.app"
     const subdomain = host.split('.')[0];
     const isRawDeploymentId = /^\d+$/.test(subdomain) && host.endsWith(PLATFORM_DOMAIN);
 
@@ -91,7 +91,7 @@ export const handler = async (event) => {
         return request;
     }
 
-    // PATH 2: named slug — "userapp.dev.blitzship.app"
+    // PATH 2: named slug — "userapp.blitzship.app"
     const isOurDomain = host.endsWith(PLATFORM_DOMAIN);
 
     if (isOurDomain) {
