@@ -34,6 +34,8 @@ import {
   MoreVertical,
   Settings,
   X,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 import {
@@ -122,6 +124,34 @@ export default function ProjectDetailsPage() {
   const [isSavingEnv, setIsSavingEnv] = useState(false);
   const [envSaveError, setEnvSaveError] = useState<string | null>(null);
   const [isRedeployModalOpen, setIsRedeployModalOpen] = useState(false);
+  const [revealedEnvs, setRevealedEnvs] = useState<Record<string, boolean>>({});
+
+  const toggleRevealEnv = (key: string) => {
+    setRevealedEnvs((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
+  const allEnvsRevealed = Boolean(
+    project?.project_env &&
+      Object.keys(project.project_env).length > 0 &&
+      Object.keys(project.project_env).every((k) => revealedEnvs[k])
+  );
+
+  const toggleRevealAllEnvs = () => {
+    if (!project?.project_env) return;
+    const keys = Object.keys(project.project_env);
+    if (allEnvsRevealed) {
+      setRevealedEnvs({});
+    } else {
+      const nextState: Record<string, boolean> = {};
+      keys.forEach((k) => {
+        nextState[k] = true;
+      });
+      setRevealedEnvs(nextState);
+    }
+  };
 
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -882,18 +912,41 @@ export default function ProjectDetailsPage() {
                 Variables applied to the environments for this project.
               </CardDescription>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="hidden sm:flex gap-1.5"
-              onClick={openEnvManager}
-            >
-              <Settings className="w-3.5 h-3.5" />
-              Manage
-            </Button>
+            <div className="flex items-center gap-2">
+              {project?.project_env &&
+                Object.keys(project.project_env).length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={toggleRevealAllEnvs}
+                  >
+                    {allEnvsRevealed ? (
+                      <>
+                        <EyeOff className="w-3.5 h-3.5" />
+                        <span>Hide All</span>
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Reveal All</span>
+                      </>
+                    )}
+                  </Button>
+                )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="hidden sm:flex gap-1.5"
+                onClick={openEnvManager}
+              >
+                <Settings className="w-3.5 h-3.5" />
+                Manage
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
-            {project.project_env &&
+            {project?.project_env &&
             Object.keys(project.project_env).length > 0 ? (
               <div className="border border-border rounded-lg overflow-hidden">
                 <div className="grid grid-cols-2 bg-neutral-900/80 p-3 text-xs font-medium text-muted-foreground border-b border-border">
@@ -901,19 +954,73 @@ export default function ProjectDetailsPage() {
                   <div>VALUE</div>
                 </div>
                 <div className="divide-y divide-border">
-                  {Object.entries(project.project_env).map(([key, value]) => (
-                    <div
-                      key={key}
-                      className="grid grid-cols-2 p-3 text-sm hover:bg-neutral-900/30 transition-colors"
-                    >
-                      <div className="font-mono text-foreground truncate pr-4">
-                        {key}
+                  {Object.entries(project.project_env).map(([key, value]) => {
+                    const isRevealed = Boolean(revealedEnvs[key]);
+                    return (
+                      <div
+                        key={key}
+                        className="grid grid-cols-2 p-3 text-sm hover:bg-neutral-900/30 transition-colors items-center"
+                      >
+                        <div className="font-mono text-foreground truncate pr-4 select-text">
+                          {key}
+                        </div>
+                        <div className="flex items-center justify-between gap-2 min-w-0">
+                          <div className="relative flex items-center min-w-0 max-w-full overflow-hidden">
+                            <span
+                              className={`font-mono text-sm transition-all duration-300 ease-in-out truncate ${
+                                isRevealed
+                                  ? "opacity-100 filter-none translate-y-0 text-foreground select-text"
+                                  : "opacity-0 blur-[2px] -translate-y-1 pointer-events-none absolute inset-0 select-none"
+                              }`}
+                            >
+                              {value as string}
+                            </span>
+                            <span
+                              className={`font-mono text-sm transition-all duration-300 ease-in-out select-none tracking-widest ${
+                                !isRevealed
+                                  ? "opacity-60 filter-none translate-y-0 text-muted-foreground"
+                                  : "opacity-0 blur-[2px] translate-y-1 pointer-events-none absolute inset-0"
+                              }`}
+                            >
+                              ••••••••
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0 ml-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => toggleRevealEnv(key)}
+                              className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-neutral-800/60 transition-colors rounded-md"
+                              title={isRevealed ? "Hide value" : "Reveal value"}
+                              aria-label={isRevealed ? `Hide ${key} value` : `Reveal ${key} value`}
+                            >
+                              {isRevealed ? (
+                                <EyeOff className="w-3.5 h-3.5 transition-transform duration-200 hover:scale-110" />
+                              ) : (
+                                <Eye className="w-3.5 h-3.5 transition-transform duration-200 hover:scale-110" />
+                              )}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleCopy(value as string, `env-${key}`)}
+                              className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-neutral-800/60 transition-colors rounded-md"
+                              title="Copy value"
+                              aria-label={`Copy ${key} value`}
+                            >
+                              {copiedValue === `env-${key}` ? (
+                                <Check className="w-3.5 h-3.5 text-green-400" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </Button>
+                          </div>
+                        </div>
                       </div>
-                      <div className="font-mono text-muted-foreground truncate">
-                        {value as string}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ) : (
