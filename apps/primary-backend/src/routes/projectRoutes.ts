@@ -56,16 +56,26 @@ router.post("/single", async (req, res) => {
       },
       include: {
         deployments: true,
+        production_deployment: true,
       },
     });
-    if (project?.user_id !== clerkUserId) {
+    if (!project || project.user_id !== clerkUserId) {
       return res.status(401).json({
         message: "Unauthorized",
       });
     }
+
+    const projectData = {
+      ...project,
+      deployments: project.deployments.map((dep) => ({
+        ...dep,
+        is_production: dep.deployment_id === project.production_deployment_id,
+      })),
+    };
+
     res.status(200).json({
       message: "Project fetched successfully",
-      data: project,
+      data: projectData,
     });
   } catch (e) {
     console.log(e);
@@ -141,8 +151,13 @@ router.delete("/delete", async (req, res) => {
   try {
     const projectId = req.body.project_id;
 
-    // Delete related records and the project atomically
-    const [, , project] = await prisma.$transaction([
+    // Unlink production_deployment_id first to prevent FK constraint on deployment deletion,
+    // then delete related records and the project atomically
+    const [, , , project] = await prisma.$transaction([
+      prisma.project.update({
+        where: { project_id: projectId },
+        data: { production_deployment_id: null },
+      }),
       prisma.deployment.deleteMany({
         where: { project_id: projectId },
       }),

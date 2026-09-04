@@ -30,31 +30,34 @@ model GithubInstallationPending {
 }
 
 model Project {
-  project_id     Int          @id @default(autoincrement())
-  name           String
-  description    String?
-  user_id        String
-  user           User         @relation(fields: [user_id], references: [id])
-  created_at     DateTime     @default(now())
-  github_url     String
-  build_cmd      String
-  output_dir     String
-  repoName       String
-  build_branch   String
-  primary_domain String
-  deployments    Deployment[]
-  project_env    Json?
+  project_id               Int          @id @default(autoincrement())
+  name                     String
+  description              String?
+  user_id                  String
+  user                     User         @relation(fields: [user_id], references: [id])
+  created_at               DateTime     @default(now())
+  github_url               String
+  build_cmd                String
+  output_dir               String
+  repoName                 String
+  build_branch             String
+  primary_domain           String
+  production_deployment_id Int?         @unique
+  production_deployment    Deployment?  @relation("ProductionDeployment", fields: [production_deployment_id], references: [deployment_id], onDelete: SetNull)
+  deployments              Deployment[] @relation("ProjectDeployments")
+  project_env              Json?
 }
 
 model Deployment {
   deployment_id    Int      @id @default(autoincrement())
   project_id       Int
-  project          Project  @relation(fields: [project_id], references: [project_id])
+  project          Project  @relation("ProjectDeployments", fields: [project_id], references: [project_id], onDelete: Cascade)
   created_at       DateTime @default(now())
   is_build_success Boolean?
   preview_url      String?
-  is_production    Boolean  @default(false)
   build_logs       String?
+
+  production_for   Project? @relation("ProductionDeployment")
 }
 
 model Domain {

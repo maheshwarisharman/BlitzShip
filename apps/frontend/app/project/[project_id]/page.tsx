@@ -88,6 +88,7 @@ type Project = {
   repoName: string;
   build_branch: string;
   primary_domain: string;
+  production_deployment_id?: number | null;
   project_env?: Record<string, string> | null;
   deployments?: Deployment[];
 };
@@ -351,6 +352,7 @@ export default function ProjectDetailsPage() {
       if (project) {
         setProject({
           ...project,
+          production_deployment_id: deployment_id,
           deployments: project.deployments?.map(dep => ({
             ...dep,
             is_production: dep.deployment_id === deployment_id
@@ -1115,7 +1117,7 @@ export default function ProjectDetailsPage() {
                             <>
                               <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
                               <span className="text-foreground mr-1">Ready</span>
-                              {deployment.is_production && (
+                              {(project?.production_deployment_id === deployment.deployment_id || deployment.is_production) && (
                                 <Badge 
                                   variant="outline" 
                                   className="bg-blue-500/10 text-blue-400 border-blue-500/20 px-1.5 py-0 h-[18px] text-[10px] pointer-events-none shrink-0"

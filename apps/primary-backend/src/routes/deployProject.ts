@@ -67,7 +67,6 @@ router.post('/mark-production', async (req, res) => {
     const auth = getAuth(req);
     const clerkUserId = auth.userId;
 
-
     console.log("Clerk Id", clerkUserId)
 
     if (!clerkUserId) {
@@ -76,46 +75,73 @@ router.post('/mark-production', async (req, res) => {
       });
     }
 
+    const { deployment_id, domain_url, is_custom_domain_present, custom_domain } = req.body;
+
+    if (!deployment_id) {
+      return res.status(400).json({
+        message: "deployment_id is required",
+      });
+    }
+
     try {
-
-        await prisma.$transaction(async (tx) => {
-        const deployment = await tx.deployment.update({
-            where: {
-            deployment_id: req.body.deployment_id,
-            },
-            data: {
-            is_production: true,
-            },
-        });
-
-        const domain = await tx.domain.update({
-            where: {
-            domain_url: req.body.domain_url,
-            },
-            data: {
-            deployment_id: req.body.deployment_id,
-            },
-        });
-
-        return { deployment, domain };
-        });
-
-        if(req.body.is_custom_domain_present) {
-            const customDomain = await prisma.customDomain.update({
+        const result = await prisma.$transaction(async (tx) => {
+            const deployment = await tx.deployment.findUniqueOrThrow({
                 where: {
-                    domain: req.body.custom_domain
+                    deployment_id,
+                },
+                include: {
+                    project: true,
+                },
+            });
+
+            if (deployment.project.user_id !== clerkUserId) {
+                throw new Error("Unauthorized");
+            }
+
+            const project = await tx.project.update({
+                where: {
+                    project_id: deployment.project_id,
                 },
                 data: {
-                    deployment_id: req.body.deployment_id
-                }
-            })
-        }
+                    production_deployment_id: deployment_id,
+                },
+            });
+
+            const domain = await tx.domain.update({
+                where: {
+                    domain_url,
+                },
+                data: {
+                    deployment_id,
+                },
+            });
+
+            let updatedCustomDomain = null;
+            if (is_custom_domain_present && custom_domain) {
+                updatedCustomDomain = await tx.customDomain.update({
+                    where: {
+                        domain: custom_domain,
+                    },
+                    data: {
+                        deployment_id,
+                    },
+                });
+            }
+
+            return { project, deployment, domain, customDomain: updatedCustomDomain };
+        });
 
         res.status(200).json({
             message: "Deployment marked as production",
-        })
+            data: result,
+        });
             
-    } catch (e) {
+    } catch (e: any) {
+        if (e.message === "Unauthorized") {
+            return res.status(403).json({
+                message: "Forbidden",
+            });
+        }
         console.log(e)
         res.status(500).json({
             message: "Some Error occured",
