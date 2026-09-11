@@ -3,7 +3,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Github, MoreHorizontal, ExternalLink, Loader2, AlertCircle, X, Check } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Search, Github, MoreHorizontal, ExternalLink, Loader2, AlertCircle, X, Check, GitBranch } from "lucide-react";
 import axios from "axios"
 import  {useEffect, useRef, useState} from "react"
 import { useAuth } from "@clerk/nextjs"
@@ -48,6 +49,8 @@ export default function DashboardPage() {
     const [isCheckingDomain, setIsCheckingDomain] = useState(false);
     const [domainAvailable, setDomainAvailable] = useState<boolean | null>(null);
     const [domainError, setDomainError] = useState<string | null>(null);
+    const [branches, setBranches] = useState<string[]>([])
+    const [isFetchingBranches, setIsFetchingBranches] = useState(false)
 
     const handleCheckDomain = async () => {
         if (!projectConfig.primary_domain.trim()) {
@@ -142,7 +145,34 @@ export default function DashboardPage() {
         }
     }
 
+    const fetchBranches = async (repoFullName: string, defaultBranch: string) => {
+        setIsFetchingBranches(true)
+        setBranches([])
+        try {
+            const token = await getToken()
+            const res = await axios.get(
+                `${API_BASE_URL}/github/get-branches?user_id=${userId}&repo=${encodeURIComponent(repoFullName)}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+            )
+            if (res.data.success) {
+                const fetchedBranches: string[] = res.data.data
+                setBranches(fetchedBranches)
+                // Ensure the default branch stays selected if it's in the list
+                if (!fetchedBranches.includes(defaultBranch) && fetchedBranches.length > 0) {
+                    setProjectConfig(prev => ({ ...prev, build_branch: fetchedBranches[0] }))
+                }
+            }
+        } catch (e) {
+            console.error("Failed to fetch branches:", e)
+            // Fall back to just showing the default branch
+            setBranches([defaultBranch])
+        } finally {
+            setIsFetchingBranches(false)
+        }
+    }
+
     const handleImportClick = (repo: any) => {
+        const defaultBranch = repo.default_branch || "main"
         setSelectedRepo(repo);
         setProjectConfig({
             name: repo.name,
@@ -151,7 +181,7 @@ export default function DashboardPage() {
             build_cmd: "npm run build",
             output_dir: "dist",
             repoName: repo.full_name,
-            build_branch: repo.default_branch || "main",
+            build_branch: defaultBranch,
             primary_domain: "",
             project_envs: []
         });
@@ -161,6 +191,7 @@ export default function DashboardPage() {
         setDomainError(null);
         setIsModalOpen(false); // Close repos modal
         setConfigModalOpen(true); // Open config modal
+        fetchBranches(repo.full_name, defaultBranch); // Fetch branches in background
     }
 
     const handleAddEnv = () => {
@@ -487,13 +518,38 @@ export default function DashboardPage() {
                     
                     <div className="flex flex-col gap-2 md:col-span-2">
                       <label className="text-xs font-medium text-muted-foreground">BRANCH TO DEPLOY</label>
-                      <Input 
-                        value={projectConfig.build_branch} 
-                        onChange={(e) => setProjectConfig({...projectConfig, build_branch: e.target.value})} 
-                        className="border-border bg-neutral-900/50 font-mono text-sm h-9" 
-                        placeholder="main" 
-                      />
+                      <Select
+                        value={projectConfig.build_branch}
+                        onValueChange={(v) => setProjectConfig({ ...projectConfig, build_branch: v })}
+                        disabled={isFetchingBranches || branches.length === 0}
+                      >
+                        <SelectTrigger className="border-border bg-neutral-900/50 font-mono text-sm h-9 w-full px-3">
+                          {isFetchingBranches ? (
+                            <span className="flex flex-1 items-center gap-2 text-muted-foreground">
+                              <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                              Loading branches…
+                            </span>
+                          ) : (
+                            <span className="flex flex-1 items-center gap-2">
+                              <GitBranch className="w-3 h-3 text-muted-foreground shrink-0" />
+                              <SelectValue placeholder="Select branch" />
+                            </span>
+                          )}
+                        </SelectTrigger>
+                        <SelectContent position="popper" className="bg-neutral-900 border-border w-[--radix-select-trigger-width]">
+                          {branches.map((branch) => (
+                            <SelectItem
+                              key={branch}
+                              value={branch}
+                              className="font-mono text-sm cursor-pointer px-3 py-2"
+                            >
+                              {branch}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
+
                   </div>
                 </div>
                 <div className="mt-2 border border-border rounded-lg bg-background p-4 flex flex-col gap-4">

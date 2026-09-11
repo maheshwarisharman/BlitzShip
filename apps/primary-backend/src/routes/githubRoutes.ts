@@ -350,6 +350,71 @@ router.get('/get-repos', async (req: Request, res: Response) => {
 })
 
 /*
+ * GET /get-branches - Fetch all branches for a specific GitHub repository.
+ * Uses the GitHub App Installation Access Token (same pattern as /get-repos).
+ *
+ * Query params:
+ *   - user_id: string  (Clerk user ID)
+ *   - repo:    string  (full repo name, e.g. "octocat/Hello-World")
+ */
+router.get('/get-branches', async (req: Request, res: Response) => {
+
+    const userId = req.query.user_id as string
+    const repo   = req.query.repo   as string
+
+    if (!userId || !repo) {
+        return res.status(400).json({
+            success: false,
+            error: 'user_id and repo query parameters are required'
+        })
+    }
+
+    try {
+        // 1. Get the user's installation_id from DB
+        const user = await prisma.user.findUnique({
+            where: { id: userId }
+        })
+
+        if (!user?.github_installation_id) {
+            return res.status(404).json({
+                success: false,
+                error: 'GitHub App is not installed for this user. Please install the app first.'
+            })
+        }
+
+        // 2. Generate a fresh installation access token (short-lived, 1hr)
+        const accessToken = await getInstallationAccessToken(user.github_installation_id)
+
+        // 3. Fetch branches for the repo using the installation token
+        //    GitHub paginates at 30 by default; fetch up to 100 per page
+        const branchesRes = await axios.get(
+            `https://api.github.com/repos/${repo}/branches`,
+            {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    Accept: 'application/vnd.github.v3+json'
+                },
+                params: { per_page: 100 }
+            }
+        )
+
+        const branchNames: string[] = branchesRes.data.map((b: { name: string }) => b.name)
+
+        return res.status(200).json({
+            success: true,
+            data: branchNames
+        })
+
+    } catch (e) {
+        console.error('[github-app] Error fetching branches:', e)
+        return res.status(500).json({
+            success: false,
+            error: 'Failed to fetch branches'
+        })
+    }
+})
+
+/*
  * GET /installation-token - Generate a fresh Installation Access Token
  * Used by other services (e.g., build-worker) that need to clone private repos.
  * Returns a short-lived token (1hr) that can be used for git clone authentication.
