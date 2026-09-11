@@ -67,10 +67,12 @@ router.post("/single", async (req, res) => {
 
     const projectData = {
       ...project,
-      deployments: project.deployments.map((dep) => ({
-        ...dep,
-        is_production: dep.deployment_id === project.production_deployment_id,
-      })),
+      deployments: project.deployments
+        .map((dep) => ({
+          ...dep,
+          is_production: dep.deployment_id === project.production_deployment_id,
+        }))
+        .sort((a, b) => Number(a.is_production) - Number(b.is_production)),
     };
 
     res.status(200).json({
