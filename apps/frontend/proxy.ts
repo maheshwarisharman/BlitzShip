@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 const isPublicRoute = createRouteMatcher(["/", "/login(.*)", "/signup(.*)", "/post-signup(.*)"]);
 
-export default clerkMiddleware(async (auth, req) => {
+export const proxy = clerkMiddleware(async (auth, req) => {
   const { userId } = await auth();
 
   // If the user is logged in, restrict access to the public-only routes
@@ -22,6 +22,8 @@ export default clerkMiddleware(async (auth, req) => {
     await auth.protect();
   }
 });
+
+export default proxy;
 
 export const config = {
   matcher: [
