@@ -5,18 +5,22 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Search, Github, MoreHorizontal, ExternalLink, Loader2, AlertCircle, X, Check } from "lucide-react";
 import axios from "axios"
-import  {useEffect, useState} from "react"
+import  {useEffect, useRef, useState} from "react"
 import { useAuth } from "@clerk/nextjs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function DashboardPage() {
     const { getToken, userId } = useAuth();
+    const router = useRouter();
 
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL
     const GITHUB_APP_NAME = process.env.NEXT_PUBLIC_GITHUB_APP_NAME
 
     const [projects, setProjects] = useState<any[]>([])
+    const [skeletonCount, setSkeletonCount] = useState(3)
+    const latestFetchIdRef = useRef(0)
     const [githubRepos, setGithubRepos] = useState<any[]>([])
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [isLoadingNewProject, setIsLoadingNewProject] = useState(false)
@@ -77,6 +81,7 @@ export default function DashboardPage() {
 
 
     const fetchProject = async () => {
+        const fetchId = ++latestFetchIdRef.current;
         setIsFetchingProjects(true)
         try {
             const token = await getToken();
@@ -85,11 +90,15 @@ export default function DashboardPage() {
                     Authorization: `Bearer ${token}`
                 }
             })
-            setProjects(response.data.data)
+            if (fetchId === latestFetchIdRef.current) {
+                setProjects(response.data.data)
+            }
         } catch (error) {
             console.error("Failed to fetch projects")
         } finally {
-            setIsFetchingProjects(false)
+            if (fetchId === latestFetchIdRef.current) {
+                setIsFetchingProjects(false)
+            }
         }
     }
 
@@ -211,9 +220,9 @@ export default function DashboardPage() {
                 { headers }
             );
 
-            // Success — close modal and refresh projects list
+            // Success — navigate to the new project page
             setConfigModalOpen(false);
-            fetchProject();
+            router.push(`/project/${projectId}`);
         } catch (error: any) {
             const msg =
                 error?.response?.data?.message ||
@@ -262,7 +271,7 @@ export default function DashboardPage() {
       {/* Projects Grid or Loading State */}
       {isFetchingProjects ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3].map((i) => (
+          {Array.from({ length: skeletonCount }, (_, i) => i).map((i) => (
             <Card key={i} className="flex flex-col justify-between overflow-hidden bg-background border-border shadow-sm">
               <CardHeader className="flex flex-row items-start justify-between space-y-0 p-5 pb-4">
                 <div className="flex flex-col gap-3 w-full">

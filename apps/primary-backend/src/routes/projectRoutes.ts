@@ -19,6 +19,9 @@ router.get("/all", async (req, res) => {
       where: {
         user_id: clerkUserId,
       },
+      orderBy: {
+        created_at: "desc",
+      },
     });
     res.status(200).json({
       message: "Projects fetched successfully",
