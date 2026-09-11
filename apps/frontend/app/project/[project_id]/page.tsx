@@ -68,6 +68,13 @@ type CustomDomainStatus =
   | "ACTIVE"
   | "FAILED";
 
+type DnsRecord = {
+  purpose?: string;
+  type: string;
+  name: string;
+  value: string;
+};
+
 type CustomDomain = {
   id: string;
   domain: string;
@@ -76,6 +83,7 @@ type CustomDomain = {
   tenant_id: string | null;
   created_at: string;
   updated_at: string;
+  dns_records?: DnsRecord[];
 };
 
 type Project = {
@@ -109,6 +117,7 @@ export default function ProjectDetailsPage() {
   const [domainMessage, setDomainMessage] = useState<string | null>(null);
   const [domainError, setDomainError] = useState<string | null>(null);
   const [customDomains, setCustomDomains] = useState<CustomDomain[]>([]);
+  const [domainDnsRecords, setDomainDnsRecords] = useState<Record<string, DnsRecord[]>>({});
   const [isLoadingCustomDomains, setIsLoadingCustomDomains] = useState(false);
   const [copiedValue, setCopiedValue] = useState<string | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -216,7 +225,21 @@ export default function ProjectDetailsPage() {
       );
 
       if (response.data?.success && Array.isArray(response.data?.data)) {
-        setCustomDomains(response.data.data as CustomDomain[]);
+        const fetchedList = response.data.data as CustomDomain[];
+        setCustomDomains(fetchedList);
+        setDomainDnsRecords((prev) => {
+          const next = { ...prev };
+          for (const item of fetchedList) {
+            if (
+              item.domain &&
+              Array.isArray(item.dns_records) &&
+              item.dns_records.length > 0
+            ) {
+              next[item.domain] = item.dns_records;
+            }
+          }
+          return next;
+        });
       } else {
         setCustomDomains([]);
       }
@@ -268,10 +291,47 @@ export default function ProjectDetailsPage() {
       );
 
       if (response.data?.success) {
+        const returnedRecords: DnsRecord[] = Array.isArray(
+          response.data?.dns_records,
+        )
+          ? response.data.dns_records
+          : [];
+
+        if (returnedRecords.length > 0) {
+          setDomainDnsRecords((prev) => ({
+            ...prev,
+            [sanitizedDomain]: returnedRecords,
+          }));
+        }
+
         setDomainMessage(
-          "Custom domain added successfully. Complete DNS verification to activate it.",
+          "Custom domain added successfully. Add the DNS records below to activate it.",
         );
         setCustomDomain("");
+
+        // Optimistically show the domain immediately with the returned DNS records
+        setCustomDomains((prev) => {
+          const exists = prev.some((d) => d.domain === sanitizedDomain);
+          if (exists) {
+            return prev.map((d) =>
+              d.domain === sanitizedDomain
+                ? { ...d, dns_records: returnedRecords }
+                : d,
+            );
+          }
+          const newEntry: CustomDomain = {
+            id: response.data?.domain?.id || `temp-${Date.now()}`,
+            domain: sanitizedDomain,
+            project_id: Number(params.project_id),
+            status: "PENDING",
+            tenant_id: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            dns_records: returnedRecords,
+          };
+          return [newEntry, ...prev];
+        });
+
         await fetchCustomDomains();
       } else {
         setDomainError(
@@ -789,112 +849,165 @@ export default function ProjectDetailsPage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {customDomains.map((domainItem) => (
-                    <div
-                      key={domainItem.id}
-                      className="rounded-xl border border-border p-5 bg-neutral-900/20"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                        <a
-                          href={formatVisitUrl(domainItem.domain)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-sm font-mono text-foreground hover:underline inline-flex items-center gap-1.5 w-fit"
-                        >
-                          {domainItem.domain}
-                          <ExternalLink className="w-3.5 h-3.5 opacity-70" />
-                        </a>
-                        <Badge
-                          variant="outline"
-                          className={`${statusBadgeStyles[domainItem.status]} pointer-events-none`}
-                        >
-                          {domainItem.status}
-                        </Badge>
-                      </div>
+                  {customDomains.map((domainItem) => {
+                    const records: DnsRecord[] =
+                      domainItem.dns_records && domainItem.dns_records.length > 0
+                        ? domainItem.dns_records
+                        : domainDnsRecords[domainItem.domain] &&
+                            domainDnsRecords[domainItem.domain].length > 0
+                          ? domainDnsRecords[domainItem.domain]
+                          : [
+                              {
+                                purpose: "Route traffic to your deployment",
+                                type: "CNAME",
+                                name: domainItem.domain,
+                                value:
+                                  process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN ||
+                                  "your-distribution.cloudfront.net",
+                              },
+                            ];
 
-                      {domainItem.status === "PENDING" && (
-                        <div className="mt-4 rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-5">
-                          <p className="text-xs text-yellow-500 font-medium mb-3">
-                            DNS configuration required — point your domain to CloudFront
-                          </p>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-                            <div className="text-muted-foreground">TYPE</div>
-                            <div className="text-muted-foreground">NAME</div>
-                            <div className="text-muted-foreground">VALUE</div>
+                    return (
+                      <div
+                        key={domainItem.id}
+                        className="rounded-xl border border-border p-5 bg-neutral-900/20"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                          <a
+                            href={formatVisitUrl(domainItem.domain)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-sm font-mono text-foreground hover:underline inline-flex items-center gap-1.5 w-fit"
+                          >
+                            {domainItem.domain}
+                            <ExternalLink className="w-3.5 h-3.5 opacity-70" />
+                          </a>
+                          <Badge
+                            variant="outline"
+                            className={`${statusBadgeStyles[domainItem.status]} pointer-events-none`}
+                          >
+                            {domainItem.status}
+                          </Badge>
+                        </div>
 
-                            <div className="font-mono text-foreground">CNAME</div>
-                            <div className="font-mono text-foreground break-all flex items-start gap-2">
-                              <span className="break-all flex-1">
-                                {domainItem.domain}
+                        {domainItem.status === "PENDING" && (
+                          <div className="mt-4 rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-4 sm:p-5 space-y-4">
+                            <div className="flex items-center gap-2">
+                              <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
                               </span>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
-                                onClick={() =>
-                                  handleCopy(
-                                    domainItem.domain,
-                                    `${domainItem.id}-name`,
-                                  )
-                                }
-                              >
-                                {copiedValue === `${domainItem.id}-name` ? (
-                                  <Check className="w-3.5 h-3.5 text-green-500" />
-                                ) : (
-                                  <Copy className="w-3.5 h-3.5" />
-                                )}
-                              </Button>
+                              <p className="text-xs text-yellow-500 font-medium">
+                                DNS verification required — configure the DNS records below with your registrar
+                              </p>
                             </div>
-                            <div className="font-mono text-foreground break-all flex items-start gap-2">
-                              <span className="break-all flex-1">
-                                {process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN || "your-distribution.cloudfront.net"}
-                              </span>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
-                                onClick={() =>
-                                  handleCopy(
-                                    process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN || "your-distribution.cloudfront.net",
-                                    `${domainItem.id}-value`,
-                                  )
-                                }
-                              >
-                                {copiedValue === `${domainItem.id}-value` ? (
-                                  <Check className="w-3.5 h-3.5 text-green-500" />
-                                ) : (
-                                  <Copy className="w-3.5 h-3.5" />
-                                )}
-                              </Button>
+
+                            <div className="space-y-3">
+                              {records.map((rec, idx) => (
+                                <div
+                                  key={idx}
+                                  className="rounded-lg border border-yellow-500/15 bg-neutral-900/70 p-3 sm:p-3.5 space-y-2.5"
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs font-medium text-neutral-200">
+                                      {rec.purpose || `DNS Record ${idx + 1}`}
+                                    </span>
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[10px] font-mono border-neutral-700 bg-neutral-800 text-neutral-300 px-1.5 py-0"
+                                    >
+                                      {rec.type || "CNAME"}
+                                    </Badge>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs pt-1 border-t border-border/40">
+                                    <div className="space-y-1">
+                                      <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
+                                        NAME / HOST
+                                      </span>
+                                      <div className="flex items-center justify-between gap-2 rounded bg-neutral-950/80 border border-border/60 px-2.5 py-1.5 font-mono text-foreground text-xs min-w-0">
+                                        <span className="break-all select-all flex-1 text-[11px] text-neutral-200">
+                                          {rec.name}
+                                        </span>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+                                          onClick={() =>
+                                            handleCopy(
+                                              rec.name,
+                                              `${domainItem.id}-${idx}-name`,
+                                            )
+                                          }
+                                          title="Copy Record Name"
+                                        >
+                                          {copiedValue === `${domainItem.id}-${idx}-name` ? (
+                                            <Check className="w-3.5 h-3.5 text-green-500" />
+                                          ) : (
+                                            <Copy className="w-3.5 h-3.5" />
+                                          )}
+                                        </Button>
+                                      </div>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                      <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
+                                        VALUE / TARGET
+                                      </span>
+                                      <div className="flex items-center justify-between gap-2 rounded bg-neutral-950/80 border border-border/60 px-2.5 py-1.5 font-mono text-foreground text-xs min-w-0">
+                                        <span className="break-all select-all flex-1 text-[11px] text-neutral-200">
+                                          {rec.value}
+                                        </span>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+                                          onClick={() =>
+                                            handleCopy(
+                                              rec.value,
+                                              `${domainItem.id}-${idx}-value`,
+                                            )
+                                          }
+                                          title="Copy Record Value"
+                                        >
+                                          {copiedValue === `${domainItem.id}-${idx}-value` ? (
+                                            <Check className="w-3.5 h-3.5 text-green-500" />
+                                          ) : (
+                                            <Copy className="w-3.5 h-3.5" />
+                                          )}
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
+
                           </div>
-                          <p className="text-[11px] text-muted-foreground mt-3">
-                            Once DNS propagates, CloudFront will automatically issue and attach the SSL certificate.
-                          </p>
-                        </div>
-                      )}
+                        )}
 
-                      {domainItem.status === "ACTIVE" && (
-                        <div className="mt-4 rounded-lg border border-green-500/20 bg-green-500/5 p-3 flex items-center gap-2">
-                          <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
-                          <p className="text-xs text-green-500 font-medium">
-                            Domain is active and serving traffic with SSL
-                          </p>
-                        </div>
-                      )}
+                        {domainItem.status === "ACTIVE" && (
+                          <div className="mt-4 rounded-lg border border-green-500/20 bg-green-500/5 p-3 flex items-center gap-2">
+                            <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+                            <p className="text-xs text-green-500 font-medium">
+                              Domain is active and serving traffic with SSL
+                            </p>
+                          </div>
+                        )}
 
-                      {domainItem.status === "FAILED" && (
-                        <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/5 p-3 flex items-center gap-2">
-                          <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
-                          <p className="text-xs text-red-500 font-medium">
-                            Domain setup failed. Please remove and try again.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                        {domainItem.status === "FAILED" && (
+                          <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/5 p-3 flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                            <p className="text-xs text-red-500 font-medium">
+                              Domain setup failed. Please remove and try again.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

@@ -93,6 +93,25 @@ export async function getACMCertificateStatus(certArn: string): Promise<{
 }
 
 /**
+ * Retrieves the DNS validation CNAME record for a pending ACM certificate.
+ */
+export async function getACMValidationRecord(
+  certArn: string
+): Promise<{ name: string; value: string } | null> {
+  try {
+    const describeCmd = new DescribeCertificateCommand({ CertificateArn: certArn });
+    const { Certificate } = await acm.send(describeCmd);
+    const record = Certificate?.DomainValidationOptions?.[0]?.ResourceRecord;
+    if (record?.Name && record?.Value) {
+      return { name: record.Name, value: record.Value };
+    }
+  } catch (err: any) {
+    console.warn(`Could not get validation record for cert ${certArn}:`, err?.message ?? err);
+  }
+  return null;
+}
+
+/**
  * Deletes an ACM certificate. Called on domain removal.
  */
 export async function deleteACMCertificate(certArn: string): Promise<void> {

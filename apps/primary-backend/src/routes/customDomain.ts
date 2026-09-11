@@ -4,6 +4,7 @@ import {
   requestACMCertificate,
   deleteACMCertificate,
   deleteDistributionTenant,
+  getACMValidationRecord,
 } from "../handlers/awsCustomDomain.js";
 
 const router: Router = Router();
@@ -42,7 +43,7 @@ router.post("/add-new-domain", async (req, res) => {
 
     // Save the domain as PENDING with the cert ARN. The cron will watch the
     // cert status and create the CF tenant once it flips to ISSUED.
-    await prisma.customDomain.create({
+    const createdDomain = await prisma.customDomain.create({
       data: {
         domain: sanitizedDomain,
         project_id: Number(project_id),
@@ -54,6 +55,7 @@ router.post("/add-new-domain", async (req, res) => {
     return res.status(200).json({
       success: true,
       message: `Domain ${sanitizedDomain} registered. Add the DNS records below to activate it.`,
+      domain: createdDomain,
       dns_records: [
         {
           purpose: "SSL Certificate Validation (required first)",
@@ -104,12 +106,48 @@ router.get("/list/:project_id", async (req, res) => {
         project_id: true,
         status: true,
         tenant_id: true,
+        cert_arn: true,
         created_at: true,
         updated_at: true,
       },
     });
 
-    return res.status(200).json({ success: true, data: domains });
+    const cloudfrontCname = process.env.CLOUDFRONT_DISTRIBUTION_DOMAIN || "";
+
+    const enrichedDomains = await Promise.all(
+      domains.map(async (domainRecord) => {
+        if (domainRecord.status === "PENDING" && domainRecord.cert_arn) {
+          const validationRecord = await getACMValidationRecord(
+            domainRecord.cert_arn
+          );
+          const dns_records = [];
+          if (validationRecord) {
+            dns_records.push({
+              purpose: "SSL Certificate Validation (required first)",
+              type: "CNAME",
+              name: validationRecord.name,
+              value: validationRecord.value,
+            });
+          }
+          if (cloudfrontCname) {
+            dns_records.push({
+              purpose: "Route traffic to your deployment",
+              type: "CNAME",
+              name: domainRecord.domain,
+              value: cloudfrontCname,
+            });
+          }
+
+          return {
+            ...domainRecord,
+            dns_records,
+          };
+        }
+        return domainRecord;
+      })
+    );
+
+    return res.status(200).json({ success: true, data: enrichedDomains });
   } catch (error) {
     return res.status(500).json({ message: "Some error occurred", error });
   }
