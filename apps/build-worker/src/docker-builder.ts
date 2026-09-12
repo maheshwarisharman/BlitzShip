@@ -5,6 +5,7 @@ import fs from 'fs/promises';
 import os from 'os';
 import type { BuildJob } from '@repo/types';
 import { uploadDirectoryToS3 } from './upload-on-s3.js'
+import { captureDeploymentSnapshot } from './snapshot.js'
 import { prisma } from '@repo/db'
 
 const BUILDER_IMAGE = 'build-worker:latest';
@@ -99,13 +100,23 @@ export async function runBuildInContainer(job: BuildJob) {
 
     const uploadStatus = await uploadDirectoryToS3(tmpPath, job.id, BUCKET)
     if (uploadStatus) {
+      const previewUrl = `https://${job.id}.blitzship.app`;
+
+      // Wait briefly for CDN/S3 propagation before snapshotting
+      await new Promise<void>((resolve) => setTimeout(resolve, 5_000));
+
+      // Capture a 1280×800 visual screenshot of the live deployment
+      // Non-fatal: if this fails the deployment is still marked successful
+      const snapshotKey = await captureDeploymentSnapshot(job.id, previewUrl, BUCKET);
+
       await prisma.deployment.update({
         where: {
           deployment_id: job.id
         },
         data: {
           is_build_success: true,
-          preview_url: `https://${job.id}.blitzship.app`
+          preview_url: previewUrl,
+          snapshot_url: snapshotKey,  // S3 key — fetch via presigned URL when serving
         }
       })
       return console.log("Directly Uploaded to s3 successfully!")
