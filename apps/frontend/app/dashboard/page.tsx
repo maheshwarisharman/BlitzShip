@@ -9,6 +9,8 @@ import axios from "axios"
 import  {useEffect, useRef, useState} from "react"
 import { useAuth } from "@clerk/nextjs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -51,6 +53,28 @@ export default function DashboardPage() {
     const [domainError, setDomainError] = useState<string | null>(null);
     const [branches, setBranches] = useState<string[]>([])
     const [isFetchingBranches, setIsFetchingBranches] = useState(false)
+
+    const domainInputRef = useRef<HTMLInputElement>(null);
+    const [domainTooltipOpen, setDomainTooltipOpen] = useState(false);
+    const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    const isDomainMissing = !projectConfig.primary_domain.trim();
+
+    const triggerDomainTooltip = () => {
+        setDomainTooltipOpen(true);
+        if (tooltipTimeoutRef.current) {
+            clearTimeout(tooltipTimeoutRef.current);
+        }
+        tooltipTimeoutRef.current = setTimeout(() => {
+            setDomainTooltipOpen(false);
+        }, 3000);
+
+        setDomainError("Please enter the domain first");
+        if (domainInputRef.current) {
+            domainInputRef.current.focus();
+            domainInputRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+    };
 
     const handleCheckDomain = async () => {
         if (!projectConfig.primary_domain.trim()) {
@@ -189,6 +213,10 @@ export default function DashboardPage() {
         setEnvVal("");
         setDomainAvailable(null);
         setDomainError(null);
+        setDomainTooltipOpen(false);
+        if (tooltipTimeoutRef.current) {
+            clearTimeout(tooltipTimeoutRef.current);
+        }
         setIsModalOpen(false); // Close repos modal
         setConfigModalOpen(true); // Open config modal
         fetchBranches(repo.full_name, defaultBranch); // Fetch branches in background
@@ -456,13 +484,16 @@ export default function DashboardPage() {
                       <label className="text-xs font-medium text-muted-foreground">PRIMARY DOMAIN</label>
                       <div className="flex items-center gap-2">
                         <Input 
+                          ref={domainInputRef}
                           value={projectConfig.primary_domain} 
                           onChange={(e) => {
                              setProjectConfig({...projectConfig, primary_domain: e.target.value});
                              if (domainAvailable !== null) setDomainAvailable(null);
                              if (domainError !== null) setDomainError(null);
+                             if (domainTooltipOpen) setDomainTooltipOpen(false);
                           }} 
-                          className={`flex-1 border-border bg-neutral-900/50 font-mono text-sm h-9 ${domainAvailable === false ? 'border-red-500/50 focus-visible:ring-red-500/50' : domainAvailable === true ? 'border-green-500/50 focus-visible:ring-green-500/50' : ''}`} 
+                          placeholder="e.g. my-app"
+                          className={`flex-1 border-border bg-neutral-900/50 font-mono text-sm h-9 ${domainAvailable === false || domainError ? 'border-red-500/50 focus-visible:ring-red-500/50' : domainAvailable === true ? 'border-green-500/50 focus-visible:ring-green-500/50' : ''}`} 
                         />
                         <Button
                           variant="secondary"
@@ -473,7 +504,7 @@ export default function DashboardPage() {
                           {isCheckingDomain ? <Loader2 className="h-4 w-4 animate-spin" /> : "Check"}
                         </Button>
                       </div>
-                      <p className="text-[14px]">https://<span className="font-semibold">{projectConfig.primary_domain}</span>.blitzship.app</p>
+                      <p className="text-[14px]">https://<span className="font-semibold">{projectConfig.primary_domain || "..."}</span>.blitzship.app</p>
                       {domainAvailable === true && (
                         <span className="text-xs text-green-500 font-medium flex items-center gap-1">
                           <Check className="w-3.5 h-3.5" /> Domain is available
@@ -612,20 +643,53 @@ export default function DashboardPage() {
 
               <div className="flex justify-end gap-3 pt-2">
                 <Button variant="ghost" onClick={() => setConfigModalOpen(false)} disabled={isDeploying}>Cancel</Button>
-                <Button
-                  onClick={handleDeploy}
-                  disabled={isDeploying || !projectConfig.name.trim() || domainAvailable !== true || isCheckingDomain}
-                  className="bg-foreground text-background hover:bg-neutral-200 min-w-28"
+                <Tooltip
+                  open={isDomainMissing ? domainTooltipOpen : false}
+                  onOpenChange={(open) => {
+                    if (isDomainMissing) {
+                      setDomainTooltipOpen(open);
+                    }
+                  }}
                 >
-                  {isDeploying ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Deploying...
-                    </>
-                  ) : (
-                    "Deploy"
+                  <TooltipTrigger asChild>
+                    <div
+                      className={cn("inline-flex outline-none", isDomainMissing && "cursor-not-allowed")}
+                      onClick={() => {
+                        if (isDomainMissing) {
+                          triggerDomainTooltip();
+                        }
+                      }}
+                      tabIndex={isDomainMissing ? 0 : undefined}
+                      onKeyDown={(e) => {
+                        if (isDomainMissing && (e.key === "Enter" || e.key === " ")) {
+                          e.preventDefault();
+                          triggerDomainTooltip();
+                        }
+                      }}
+                    >
+                      <Button
+                        onClick={handleDeploy}
+                        disabled={isDeploying || !projectConfig.name.trim() || domainAvailable !== true || isCheckingDomain}
+                        className="bg-foreground text-background hover:bg-neutral-200 min-w-28"
+                      >
+                        {isDeploying ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Deploying...
+                          </>
+                        ) : (
+                          "Deploy"
+                        )}
+                      </Button>
+                    </div>
+                  </TooltipTrigger>
+                  {isDomainMissing && (
+                    <TooltipContent side="top" align="center" className="flex items-center gap-1.5 bg-neutral-900 border border-neutral-700 text-neutral-100 px-3 py-1.5 text-xs rounded-md shadow-xl">
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>Please enter the domain first</span>
+                    </TooltipContent>
                   )}
-                </Button>
+                </Tooltip>
               </div>
             </div>
           )}
