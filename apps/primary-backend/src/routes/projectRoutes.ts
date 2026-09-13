@@ -1,8 +1,14 @@
 import { Router } from "express";
 import { prisma } from "@repo/db";
 import { getAuth } from "@clerk/express";
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const router: Router = Router();
+
+const s3 = new S3Client({ region: process.env.AWS_REGION });
+const BUCKET = process.env.S3_BUCKET!;
+const SNAPSHOT_PRESIGN_TTL_SECONDS = 60 * 60; // 1 hour
 
 router.get("/all", async (req, res) => {
   const auth = getAuth(req);
@@ -68,13 +74,28 @@ router.post("/single", async (req, res) => {
       });
     }
 
+    // Generate presigned URLs for any deployment that has a snapshot S3 key
+    const deploymentsWithSnapshots = await Promise.all(
+      project.deployments.map(async (dep) => {
+        let snapshot_url: string | null = null;
+        if (dep.snapshot_url) {
+          snapshot_url = await getSignedUrl(
+            s3,
+            new GetObjectCommand({ Bucket: BUCKET, Key: dep.snapshot_url }),
+            { expiresIn: SNAPSHOT_PRESIGN_TTL_SECONDS },
+          );
+        }
+        return {
+          ...dep,
+          snapshot_url,
+          is_production: dep.deployment_id === project.production_deployment_id,
+        };
+      })
+    );
+
     const projectData = {
       ...project,
-      deployments: project.deployments
-        .map((dep) => ({
-          ...dep,
-          is_production: dep.deployment_id === project.production_deployment_id,
-        }))
+      deployments: deploymentsWithSnapshots
         .sort((a, b) => Number(a.is_production) - Number(b.is_production)),
     };
 
