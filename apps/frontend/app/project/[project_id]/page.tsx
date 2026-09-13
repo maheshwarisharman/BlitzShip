@@ -58,6 +58,7 @@ type Deployment = {
   deployment_id: number;
   is_build_success: boolean | null;
   preview_url: string | null;
+  snapshot_url: string | null;
   created_at: string;
   build_logs: string | null;
   is_production?: boolean;
@@ -99,6 +100,7 @@ type Project = {
   build_branch: string;
   primary_domain: string;
   production_deployment_id?: number | null;
+  production_deployment?: Deployment | null;
   project_env?: Record<string, string> | null;
   deployments?: Deployment[];
 };
@@ -650,12 +652,22 @@ export default function ProjectDetailsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col md:flex-row gap-6">
-            {/* Domain Preview Mock */}
-            <div className="w-full md:w-5/12 aspect-video bg-neutral-950 border border-neutral-800 rounded-lg flex flex-col items-center justify-center overflow-hidden relative group">
-              <Globe className="w-10 h-10 text-neutral-700 relative z-10 mb-2" />
-              <span className="text-xs font-medium text-neutral-500">
-                Preview Available
-              </span>
+            {/* Deployment Snapshot Preview */}
+            <div className="w-full md:w-5/12 aspect-video bg-neutral-950 border border-neutral-800 rounded-lg overflow-hidden relative group">
+              {project.production_deployment?.snapshot_url ? (
+                <img
+                  src={project.production_deployment.snapshot_url}
+                  alt="Deployment snapshot"
+                  className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
+                />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center">
+                  <Globe className="w-10 h-10 text-neutral-700 relative z-10 mb-2" />
+                  <span className="text-xs font-medium text-neutral-500">
+                    No Preview Available
+                  </span>
+                </div>
+              )}
               <div className="absolute inset-x-0 bottom-0 p-2.5 bg-linear-to-t from-black/90 to-transparent z-10 flex border-t border-neutral-800/50">
                 <p className="text-[11px] text-neutral-400 truncate font-mono">
                   {project.primary_domain || "No domain linked"}

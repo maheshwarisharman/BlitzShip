@@ -77,8 +77,11 @@ router.post("/single", async (req, res) => {
     // Generate presigned URLs for any deployment that has a snapshot S3 key
     const deploymentsWithSnapshots = await Promise.all(
       project.deployments.map(async (dep) => {
+        
         let snapshot_url: string | null = null;
+        console.log(dep)
         if (dep.snapshot_url) {
+          console.log("HEEYY");
           snapshot_url = await getSignedUrl(
             s3,
             new GetObjectCommand({ Bucket: BUCKET, Key: dep.snapshot_url }),
