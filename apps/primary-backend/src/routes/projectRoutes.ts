@@ -79,9 +79,7 @@ router.post("/single", async (req, res) => {
       project.deployments.map(async (dep) => {
         
         let snapshot_url: string | null = null;
-        console.log(dep)
         if (dep.snapshot_url) {
-          console.log("HEEYY");
           snapshot_url = await getSignedUrl(
             s3,
             new GetObjectCommand({ Bucket: BUCKET, Key: dep.snapshot_url }),
@@ -96,8 +94,20 @@ router.post("/single", async (req, res) => {
       })
     );
 
+    // Also presign the snapshot for the production_deployment object itself
+    let productionDeployment = project.production_deployment;
+    if (productionDeployment?.snapshot_url) {
+      const presignedUrl = await getSignedUrl(
+        s3,
+        new GetObjectCommand({ Bucket: BUCKET, Key: productionDeployment.snapshot_url }),
+        { expiresIn: SNAPSHOT_PRESIGN_TTL_SECONDS },
+      );
+      productionDeployment = { ...productionDeployment, snapshot_url: presignedUrl };
+    }
+
     const projectData = {
       ...project,
+      production_deployment: productionDeployment,
       deployments: deploymentsWithSnapshots
         .sort((a, b) => Number(a.is_production) - Number(b.is_production)),
     };

@@ -668,11 +668,6 @@ export default function ProjectDetailsPage() {
                   </span>
                 </div>
               )}
-              <div className="absolute inset-x-0 bottom-0 p-2.5 bg-linear-to-t from-black/90 to-transparent z-10 flex border-t border-neutral-800/50">
-                <p className="text-[11px] text-neutral-400 truncate font-mono">
-                  {project.primary_domain || "No domain linked"}
-                </p>
-              </div>
             </div>
 
             <div className="flex-1 flex flex-col justify-center gap-5">
