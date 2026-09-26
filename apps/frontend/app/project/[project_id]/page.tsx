@@ -36,6 +36,7 @@ import {
   X,
   Eye,
   EyeOff,
+  ChevronDown,
 } from "lucide-react";
 
 import {
@@ -137,6 +138,42 @@ export default function ProjectDetailsPage() {
   const [isRedeployModalOpen, setIsRedeployModalOpen] = useState(false);
   const [revealedEnvs, setRevealedEnvs] = useState<Record<string, boolean>>({});
 
+  // Lazy-loaded decrypted env vars — only fetched when the section is opened
+  const [isEnvSectionOpen, setIsEnvSectionOpen] = useState(false);
+  const [envVars, setEnvVars] = useState<Record<string, string> | null>(null);
+  const [isFetchingEnvs, setIsFetchingEnvs] = useState(false);
+  const [envFetchError, setEnvFetchError] = useState<string | null>(null);
+
+  const fetchEnvVars = useCallback(async () => {
+    if (!params.project_id) return;
+    setIsFetchingEnvs(true);
+    setEnvFetchError(null);
+    try {
+      const token = await getToken();
+      const res = await axios.get(
+        `${API_BASE_URL}/projects/env?project_id=${Number(params.project_id)}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      setEnvVars(res.data.data ?? {});
+    } catch (err: unknown) {
+      const message = axios.isAxiosError(err)
+        ? (err.response?.data as { message?: string } | undefined)?.message || err.message
+        : err instanceof Error ? err.message : "Failed to fetch env variables.";
+      setEnvFetchError(message);
+    } finally {
+      setIsFetchingEnvs(false);
+    }
+  }, [params.project_id, getToken, API_BASE_URL]);
+
+  const handleToggleEnvSection = () => {
+    const next = !isEnvSectionOpen;
+    setIsEnvSectionOpen(next);
+    // Fetch once when first opened, or if the user re-opens after saving
+    if (next && envVars === null) {
+      fetchEnvVars();
+    }
+  };
+
   const toggleRevealEnv = (key: string) => {
     setRevealedEnvs((prev) => ({
       ...prev,
@@ -145,21 +182,19 @@ export default function ProjectDetailsPage() {
   };
 
   const allEnvsRevealed = Boolean(
-    project?.project_env &&
-      Object.keys(project.project_env).length > 0 &&
-      Object.keys(project.project_env).every((k) => revealedEnvs[k])
+    envVars &&
+      Object.keys(envVars).length > 0 &&
+      Object.keys(envVars).every((k) => revealedEnvs[k])
   );
 
   const toggleRevealAllEnvs = () => {
-    if (!project?.project_env) return;
-    const keys = Object.keys(project.project_env);
+    if (!envVars) return;
+    const keys = Object.keys(envVars);
     if (allEnvsRevealed) {
       setRevealedEnvs({});
     } else {
       const nextState: Record<string, boolean> = {};
-      keys.forEach((k) => {
-        nextState[k] = true;
-      });
+      keys.forEach((k) => { nextState[k] = true; });
       setRevealedEnvs(nextState);
     }
   };
@@ -465,12 +500,25 @@ export default function ProjectDetailsPage() {
     }
   };
 
-  const openEnvManager = () => {
-    const existing = project?.project_env
-      ? Object.entries(project.project_env).map(([key, value]) => ({ key, value }))
-      : [];
-    setEnvRows(existing.length > 0 ? existing : [{ key: "", value: "" }]);
+  const openEnvManager = async () => {
     setEnvSaveError(null);
+    // Use already-fetched vars if available, otherwise fetch now
+    let vars = envVars;
+    if (vars === null) {
+      try {
+        const token = await getToken();
+        const res = await axios.get(
+          `${API_BASE_URL}/projects/env?project_id=${Number(params.project_id)}`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        vars = res.data.data ?? {};
+        setEnvVars(vars);
+      } catch {
+        vars = {};
+      }
+    }
+    const existing = vars ? Object.entries(vars).map(([key, value]) => ({ key, value })) : [];
+    setEnvRows(existing.length > 0 ? existing : [{ key: "", value: "" }]);
     setIsEnvModalOpen(true);
   };
 
@@ -495,10 +543,10 @@ export default function ProjectDetailsPage() {
         { headers: { Authorization: `Bearer ${token}` } },
       );
 
-      // Optimistically update local project state
-      if (project) {
-        setProject({ ...project, project_env: envObject });
-      }
+      // Update the lazy-loaded env state and reset section so it re-fetches
+      setEnvVars(envObject);
+      setRevealedEnvs({});
+      setEnvVars(null); // force re-fetch on next open so we see encrypted→decrypted roundtrip
 
       setIsEnvModalOpen(false);
       setIsRedeployModalOpen(true);
@@ -1021,20 +1069,45 @@ export default function ProjectDetailsPage() {
           </CardContent>
         </Card>
 
-        {/* Environment Variables & Details */}
-        <Card className="col-span-1 md:col-span-3 bg-background border-border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-4">
-            <div className="flex flex-col gap-1">
-              <CardTitle className="text-lg font-semibold">
-                Environment Variables
-              </CardTitle>
-              <CardDescription>
-                Variables applied to the environments for this project.
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              {project?.project_env &&
-                Object.keys(project.project_env).length > 0 && (
+        {/* Environment Variables — lazy-loaded collapsible section */}
+        <Card className="col-span-1 md:col-span-3 bg-background border-border shadow-sm overflow-hidden">
+          {/* Clickable header acts as the accordion toggle */}
+          <button
+            id="env-section-toggle"
+            type="button"
+            onClick={handleToggleEnvSection}
+            className="w-full text-left"
+            aria-expanded={isEnvSectionOpen}
+          >
+            <CardHeader className="flex flex-row items-center justify-between pb-4 hover:bg-neutral-900/30 transition-colors cursor-pointer">
+              <div className="flex flex-col gap-1">
+                <CardTitle className="text-lg font-semibold">
+                  Environment Variables
+                </CardTitle>
+                <CardDescription>
+                  Variables applied to the environments for this project.
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <ChevronDown
+                  className={`w-4 h-4 text-muted-foreground transition-transform duration-300 ${
+                    isEnvSectionOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </div>
+            </CardHeader>
+          </button>
+
+          {/* Animated collapsible body */}
+          <div
+            className={`transition-all duration-300 ease-in-out overflow-hidden ${
+              isEnvSectionOpen ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
+            }`}
+          >
+            <CardContent className="pt-0">
+              {/* Toolbar — shown only when env is loaded */}
+              {envVars && Object.keys(envVars).length > 0 && (
+                <div className="flex items-center justify-end gap-2 pb-3">
                   <Button
                     variant="outline"
                     size="sm"
@@ -1042,124 +1115,138 @@ export default function ProjectDetailsPage() {
                     onClick={toggleRevealAllEnvs}
                   >
                     {allEnvsRevealed ? (
-                      <>
-                        <EyeOff className="w-3.5 h-3.5" />
-                        <span>Hide All</span>
-                      </>
+                      <><EyeOff className="w-3.5 h-3.5" /><span>Hide All</span></>
                     ) : (
-                      <>
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>Reveal All</span>
-                      </>
+                      <><Eye className="w-3.5 h-3.5" /><span>Reveal All</span></>
                     )}
                   </Button>
-                )}
-              <Button
-                variant="outline"
-                size="sm"
-                className="hidden sm:flex gap-1.5"
-                onClick={openEnvManager}
-              >
-                <Settings className="w-3.5 h-3.5" />
-                Manage
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {project?.project_env &&
-            Object.keys(project.project_env).length > 0 ? (
-              <div className="border border-border rounded-lg overflow-hidden">
-                <div className="grid grid-cols-2 bg-neutral-900/80 p-3 text-xs font-medium text-muted-foreground border-b border-border">
-                  <div>KEY</div>
-                  <div>VALUE</div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={openEnvManager}
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                    Manage
+                  </Button>
                 </div>
-                <div className="divide-y divide-border">
-                  {Object.entries(project.project_env).map(([key, value]) => {
-                    const isRevealed = Boolean(revealedEnvs[key]);
-                    return (
-                      <div
-                        key={key}
-                        className="grid grid-cols-2 p-3 text-sm hover:bg-neutral-900/30 transition-colors items-center"
-                      >
-                        <div className="font-mono text-foreground truncate pr-4 select-text">
-                          {key}
-                        </div>
-                        <div className="flex items-center justify-between gap-2 min-w-0">
-                          <div className="relative flex items-center min-w-0 max-w-full overflow-hidden">
-                            <span
-                              className={`font-mono text-sm transition-all duration-300 ease-in-out truncate ${
-                                isRevealed
-                                  ? "opacity-100 filter-none translate-y-0 text-foreground select-text"
-                                  : "opacity-0 blur-[2px] -translate-y-1 pointer-events-none absolute inset-0 select-none"
-                              }`}
-                            >
-                              {value as string}
-                            </span>
-                            <span
-                              className={`font-mono text-sm transition-all duration-300 ease-in-out select-none tracking-widest ${
-                                !isRevealed
-                                  ? "opacity-60 filter-none translate-y-0 text-muted-foreground"
-                                  : "opacity-0 blur-[2px] translate-y-1 pointer-events-none absolute inset-0"
-                              }`}
-                            >
-                              ••••••••
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0 ml-2">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => toggleRevealEnv(key)}
-                              className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-neutral-800/60 transition-colors rounded-md"
-                              title={isRevealed ? "Hide value" : "Reveal value"}
-                              aria-label={isRevealed ? `Hide ${key} value` : `Reveal ${key} value`}
-                            >
-                              {isRevealed ? (
-                                <EyeOff className="w-3.5 h-3.5 transition-transform duration-200 hover:scale-110" />
-                              ) : (
-                                <Eye className="w-3.5 h-3.5 transition-transform duration-200 hover:scale-110" />
-                              )}
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleCopy(value as string, `env-${key}`)}
-                              className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-neutral-800/60 transition-colors rounded-md"
-                              title="Copy value"
-                              aria-label={`Copy ${key} value`}
-                            >
-                              {copiedValue === `env-${key}` ? (
-                                <Check className="w-3.5 h-3.5 text-green-400" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" />
-                              )}
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+              )}
+
+              {/* Loading state */}
+              {isFetchingEnvs && (
+                <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">Loading environment variables…</span>
                 </div>
-              </div>
-            ) : (
-              <div className="text-center py-8 border border-dashed border-border rounded-lg bg-neutral-900/20">
-                <p className="text-sm text-muted-foreground">
-                  No environment variables configured.
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-4 gap-1.5"
-                  onClick={openEnvManager}
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Add Variables
-                </Button>
-              </div>
-            )}
-          </CardContent>
+              )}
+
+              {/* Error state */}
+              {envFetchError && !isFetchingEnvs && (
+                <div className="flex flex-col items-center gap-3 py-8 border border-dashed border-red-800/40 rounded-lg bg-red-950/20">
+                  <p className="text-sm text-red-400">{envFetchError}</p>
+                  <Button variant="outline" size="sm" onClick={fetchEnvVars}>
+                    Retry
+                  </Button>
+                </div>
+              )}
+
+              {/* Env table */}
+              {!isFetchingEnvs && !envFetchError && envVars && (
+                Object.keys(envVars).length > 0 ? (
+                  <div className="border border-border rounded-lg overflow-hidden">
+                    <div className="grid grid-cols-2 bg-neutral-900/80 p-3 text-xs font-medium text-muted-foreground border-b border-border">
+                      <div>KEY</div>
+                      <div>VALUE</div>
+                    </div>
+                    <div className="divide-y divide-border">
+                      {Object.entries(envVars).map(([key, value]) => {
+                        const isRevealed = Boolean(revealedEnvs[key]);
+                        return (
+                          <div
+                            key={key}
+                            className="grid grid-cols-2 p-3 text-sm hover:bg-neutral-900/30 transition-colors items-center"
+                          >
+                            <div className="font-mono text-foreground truncate pr-4 select-text">
+                              {key}
+                            </div>
+                            <div className="flex items-center justify-between gap-2 min-w-0">
+                              <div className="relative flex items-center min-w-0 max-w-full overflow-hidden">
+                                <span
+                                  className={`font-mono text-sm transition-all duration-300 ease-in-out truncate ${
+                                    isRevealed
+                                      ? "opacity-100 filter-none translate-y-0 text-foreground select-text"
+                                      : "opacity-0 blur-[2px] -translate-y-1 pointer-events-none absolute inset-0 select-none"
+                                  }`}
+                                >
+                                  {value}
+                                </span>
+                                <span
+                                  className={`font-mono text-sm transition-all duration-300 ease-in-out select-none tracking-widest ${
+                                    !isRevealed
+                                      ? "opacity-60 filter-none translate-y-0 text-muted-foreground"
+                                      : "opacity-0 blur-[2px] translate-y-1 pointer-events-none absolute inset-0"
+                                  }`}
+                                >
+                                  ••••••••
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0 ml-2">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => toggleRevealEnv(key)}
+                                  className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-neutral-800/60 transition-colors rounded-md"
+                                  title={isRevealed ? "Hide value" : "Reveal value"}
+                                  aria-label={isRevealed ? `Hide ${key} value` : `Reveal ${key} value`}
+                                >
+                                  {isRevealed ? (
+                                    <EyeOff className="w-3.5 h-3.5 transition-transform duration-200 hover:scale-110" />
+                                  ) : (
+                                    <Eye className="w-3.5 h-3.5 transition-transform duration-200 hover:scale-110" />
+                                  )}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleCopy(value, `env-${key}`)}
+                                  className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-neutral-800/60 transition-colors rounded-md"
+                                  title="Copy value"
+                                  aria-label={`Copy ${key} value`}
+                                >
+                                  {copiedValue === `env-${key}` ? (
+                                    <Check className="w-3.5 h-3.5 text-green-400" />
+                                  ) : (
+                                    <Copy className="w-3.5 h-3.5" />
+                                  )}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 border border-dashed border-border rounded-lg bg-neutral-900/20">
+                    <p className="text-sm text-muted-foreground">
+                      No environment variables configured.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-4 gap-1.5"
+                      onClick={openEnvManager}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add Variables
+                    </Button>
+                  </div>
+                )
+              )}
+            </CardContent>
+          </div>
         </Card>
 
         {/* Env Editor Dialog */}
