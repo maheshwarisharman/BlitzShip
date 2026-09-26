@@ -121,6 +121,11 @@ export async function runBuildInContainer(job: BuildJob) {
           },
           select: {
             project_id: true,
+            project: {
+              select: {
+                primary_domain: true,
+              },
+            },
           },
         });
 
@@ -132,6 +137,22 @@ export async function runBuildInContainer(job: BuildJob) {
             production_deployment_id: job.id,
           },
         });
+
+        if (deployment.project?.primary_domain) {
+          await tx.domain.upsert({
+            where: {
+              domain_url: deployment.project.primary_domain,
+            },
+            update: {
+              deployment_id: job.id,
+              last_updated_at: new Date(),
+            },
+            create: {
+              domain_url: deployment.project.primary_domain,
+              deployment_id: job.id,
+            },
+          });
+        }
       });
 
       return console.log("Directly Uploaded to s3 successfully!")
