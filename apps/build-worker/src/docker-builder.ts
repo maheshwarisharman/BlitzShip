@@ -109,16 +109,31 @@ export async function runBuildInContainer(job: BuildJob) {
       // Non-fatal: if this fails the deployment is still marked successful
       const snapshotKey = await captureDeploymentSnapshot(job.id, previewUrl, BUCKET);
 
-      await prisma.deployment.update({
-        where: {
-          deployment_id: job.id
-        },
-        data: {
-          is_build_success: true,
-          preview_url: previewUrl,
-          snapshot_url: snapshotKey,  // S3 key — fetch via presigned URL when serving
-        }
-      })
+      await prisma.$transaction(async (tx) => {
+        const deployment = await tx.deployment.update({
+          where: {
+            deployment_id: job.id,
+          },
+          data: {
+            is_build_success: true,
+            preview_url: previewUrl,
+            snapshot_url: snapshotKey,  // S3 key — fetch via presigned URL when serving
+          },
+          select: {
+            project_id: true,
+          },
+        });
+
+        await tx.project.update({
+          where: {
+            project_id: deployment.project_id,
+          },
+          data: {
+            production_deployment_id: job.id,
+          },
+        });
+      });
+
       return console.log("Directly Uploaded to s3 successfully!")
     }
     await prisma.deployment.update({
