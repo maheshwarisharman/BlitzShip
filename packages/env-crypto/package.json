@@ -1,0 +1,16 @@
+{
+    "name": "@repo/env-crypto",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "exports": {
+        ".": "./src/index.ts"
+    },
+    "scripts": {
+        "check-types": "tsc --noEmit",
+        "lint": "echo \"No linting configured\""
+    },
+    "devDependencies": {
+        "typescript": "^5"
+    }
+}
