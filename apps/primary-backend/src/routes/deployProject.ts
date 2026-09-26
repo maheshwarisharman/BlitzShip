@@ -44,7 +44,7 @@ router.post('/create-project', validate(createNewProjectSchema), async (req, res
                 repoName: body.repoName,
                 build_branch: body.build_branch,
                 primary_domain: body.primary_domain,
-                project_env: encryptedEnvs ?? null,
+                project_env: encryptedEnvs,
             }
         })
 
