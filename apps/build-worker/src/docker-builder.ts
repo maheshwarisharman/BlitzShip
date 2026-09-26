@@ -64,16 +64,20 @@ export async function runBuildInContainer(job: BuildJob) {
       '--prefix', repoDir,
     ])
 
-    // Write environment variables to .env file inside the container
+    // Write environment variables to .env file inside the container.
+    // Uses stdin piping instead of shell interpolation to safely handle any
+    // special characters (quotes, newlines, backslashes) in values.
     if (job.envVars && Object.keys(job.envVars).length > 0) {
       const envFileContent = Object.entries(job.envVars)
         .map(([key, value]) => `${key}=${value}`)
         .join('\n');
 
-      await dockerExec(containerId, [
-        'sh', '-c',
-        `printf '%s' '${envFileContent.replace(/'/g, "'\\''")}' > ${repoDir}/.env`,
+      const writeProcess = execa('docker', [
+        'exec', '-i', containerId,
+        'sh', '-c', `cat > ${repoDir}/.env`,
       ]);
+      writeProcess.stdin?.end(envFileContent);
+      await writeProcess;
 
       onLog(`[build] Injected ${Object.keys(job.envVars).length} env variable(s) into .env`);
     }
