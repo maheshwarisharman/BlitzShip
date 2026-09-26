@@ -20,6 +20,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1131.0",
     "@clerk/express": "^1.7.6",
     "@repo/db": "*",
+    "@repo/env-crypto": "*",
     "@repo/types": "*",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",

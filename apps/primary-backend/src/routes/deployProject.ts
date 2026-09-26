@@ -5,6 +5,7 @@ import { validate } from '../middleware/validate.middleware.js'
 import { createNewProjectSchema, createDeploymentSchema } from "../schemas/deployment.schema.js";
 import type { BuildJob } from '@repo/types'
 import { getAuth } from "@clerk/express";
+import { encryptEnvMap, decryptEnvMap } from '@repo/env-crypto'
 
 const router: Router = Router()
 
@@ -28,6 +29,10 @@ router.post('/create-project', validate(createNewProjectSchema), async (req, res
     console.log(body)
 
     try {
+        const encryptedEnvs = body.project_envs
+            ? encryptEnvMap(body.project_envs as Record<string, string>)
+            : undefined
+
         const project = await prisma.project.create({
             data: {
                 user_id: clerkUserId,
@@ -39,7 +44,7 @@ router.post('/create-project', validate(createNewProjectSchema), async (req, res
                 repoName: body.repoName,
                 build_branch: body.build_branch,
                 primary_domain: body.primary_domain,
-                project_env: body.project_envs
+                project_env: encryptedEnvs ?? null,
             }
         })
 
@@ -50,7 +55,8 @@ router.post('/create-project', validate(createNewProjectSchema), async (req, res
         })
         res.status(200).json({
             message: "Project Created Successfully",
-            data: project
+            // Never return env values in API responses
+            data: { ...project, project_env: undefined }
         })
 
     } catch (e) {
@@ -186,8 +192,13 @@ router.post('/create-deployment', validate(createDeploymentSchema), async (req, 
             }
         })
 
-        const envVars: Record<string, string> = project.project_env
+        const encryptedEnv = project.project_env
             ? (project.project_env as Record<string, string>)
+            : {}
+
+        // Decrypt in-memory here — plaintext values are never re-persisted
+        const envVars: Record<string, string> = Object.keys(encryptedEnv).length > 0
+            ? decryptEnvMap(encryptedEnv)
             : {}
 
         const job: BuildJob = {

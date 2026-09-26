@@ -3,6 +3,7 @@ import { prisma } from "@repo/db";
 import { getAuth } from "@clerk/express";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { encryptEnvMap } from "@repo/env-crypto";
 
 const router: Router = Router();
 
@@ -29,9 +30,11 @@ router.get("/all", async (req, res) => {
         created_at: "desc",
       },
     });
+    // Never return encrypted env values to the client
+    const safeProjects = projects.map((p) => ({ ...p, project_env: undefined }));
     res.status(200).json({
       message: "Projects fetched successfully",
-      data: projects,
+      data: safeProjects,
     });
   } catch (e) {
     console.log(e);
@@ -107,6 +110,7 @@ router.post("/single", async (req, res) => {
 
     const projectData = {
       ...project,
+      project_env: undefined, // Never return encrypted env values to the client
       production_deployment: productionDeployment,
       deployments: deploymentsWithSnapshots
         .sort((a, b) => Number(a.is_production) - Number(b.is_production)),
@@ -168,14 +172,17 @@ router.put("/env", async (req, res) => {
       });
     }
 
+    const encryptedEnv = encryptEnvMap(env as Record<string, string>);
+
     const updated = await prisma.project.update({
       where: { project_id },
-      data: { project_env: env },
+      data: { project_env: encryptedEnv },
     });
 
     res.status(200).json({
       message: "Environment variables updated successfully",
-      data: { project_id: updated.project_id, project_env: updated.project_env },
+      // Return key names only — never echo encrypted or plaintext values
+      data: { project_id: updated.project_id, env_keys: Object.keys(encryptedEnv) },
     });
   } catch (e) {
     console.log(e);
