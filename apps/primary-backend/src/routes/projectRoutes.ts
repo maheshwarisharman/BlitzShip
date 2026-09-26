@@ -3,7 +3,7 @@ import { prisma } from "@repo/db";
 import { getAuth } from "@clerk/express";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { encryptEnvMap } from "@repo/env-crypto";
+import { encryptEnvMap, decryptEnvMap } from "@repo/env-crypto";
 
 const router: Router = Router();
 
@@ -190,6 +190,48 @@ router.put("/env", async (req, res) => {
       message: "Some error occured",
       error: e,
     });
+  }
+});
+
+router.get("/env", async (req, res) => {
+  const auth = getAuth(req);
+  const clerkUserId = auth.userId;
+
+  if (!clerkUserId) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  const project_id = Number(req.query.project_id);
+  if (!project_id || isNaN(project_id)) {
+    return res.status(400).json({ message: "project_id query param is required" });
+  }
+
+  try {
+    const project = await prisma.project.findUnique({
+      where: { project_id },
+      select: { user_id: true, project_env: true },
+    });
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    if (project.user_id !== clerkUserId) {
+      return res.status(403).json({ message: "Forbidden: you do not own this project" });
+    }
+
+    const encrypted = project.project_env as Record<string, string> | null;
+    const decrypted = encrypted && Object.keys(encrypted).length > 0
+      ? decryptEnvMap(encrypted)
+      : {};
+
+    res.status(200).json({
+      message: "Environment variables fetched successfully",
+      data: decrypted,
+    });
+  } catch (e) {
+    console.log(e);
+    res.status(500).json({ message: "Some error occured", error: e });
   }
 });
 
