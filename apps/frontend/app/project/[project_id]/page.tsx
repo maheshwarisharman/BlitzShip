@@ -110,6 +110,7 @@ export default function ProjectDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const { getToken } = useAuth();
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
   const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -198,8 +199,6 @@ export default function ProjectDetailsPage() {
       setRevealedEnvs(nextState);
     }
   };
-
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
   useEffect(() => {
     const fetchProject = async () => {
