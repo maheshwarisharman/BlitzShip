@@ -170,6 +170,15 @@ export async function runBuildInContainer(job: BuildJob) {
   } catch (e) {
 
     console.error("There was some error in building the project:- ", e)
+    await prisma.deployment.update({
+      where: {
+        deployment_id: job.id,
+      },
+      data: {
+        is_build_success: false,
+        build_logs: e || "Some Unknown Error Occured"
+      },
+    });
 
   } finally {
 
