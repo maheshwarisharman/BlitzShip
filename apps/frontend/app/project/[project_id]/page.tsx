@@ -54,6 +54,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 
 type Deployment = {
   deployment_id: number;
@@ -414,7 +415,9 @@ export default function ProjectDetailsPage() {
         : err instanceof Error
           ? err.message
           : "Unknown error";
-      alert("Failed to trigger deployment: " + message);
+      toast.error("Failed to trigger deployment", {
+        description: message,
+      });
     } finally {
       setIsDeploying(false);
     }
@@ -486,6 +489,7 @@ export default function ProjectDetailsPage() {
           }))
         });
       }
+      toast.success("Deployment marked as production");
     } catch (err: unknown) {
       console.error("Error marking as production:", err);
       const message = axios.isAxiosError(err)
@@ -494,7 +498,9 @@ export default function ProjectDetailsPage() {
         : err instanceof Error
           ? err.message
           : "Unknown error";
-      alert("Failed to mark deployment as production: " + message);
+      toast.error("Failed to mark deployment as production", {
+        description: message,
+      });
     } finally {
       setIsMarkingProduction(null);
     }
