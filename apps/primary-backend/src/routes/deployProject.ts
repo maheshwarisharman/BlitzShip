@@ -39,6 +39,7 @@ router.post('/create-project', validate(createNewProjectSchema), async (req, res
                 name: body.name,
                 description: body.description,
                 github_url: body.github_url,
+                repoId: body.repoId,
                 build_cmd: body.build_cmd,
                 output_dir: body.output_dir,
                 repoName: body.repoName,

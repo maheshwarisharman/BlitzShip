@@ -37,6 +37,7 @@ model Project {
   user                     User         @relation(fields: [user_id], references: [id])
   created_at               DateTime     @default(now())
   github_url               String
+  repoId                   String
   build_cmd                String
   output_dir               String
   repoName                 String

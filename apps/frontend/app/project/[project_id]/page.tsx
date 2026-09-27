@@ -95,6 +95,7 @@ type Project = {
   user_id: string;
   created_at: string;
   github_url: string;
+  repoId?: string;
   build_cmd: string;
   output_dir: string;
   repoName: string;
