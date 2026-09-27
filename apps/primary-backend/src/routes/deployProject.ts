@@ -204,6 +204,7 @@ router.post('/create-deployment', validate(createDeploymentSchema), async (req, 
 
         const job: BuildJob = {
             id: deployment.deployment_id,
+            repoId: project.repoId,
             repoName: project.repoName,
             repoUrl: project.github_url,
             buildCommand: project.build_cmd,

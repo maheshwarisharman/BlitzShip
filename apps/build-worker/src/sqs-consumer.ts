@@ -75,6 +75,10 @@ async function parseJobFromMessage(message: Message): Promise<BuildJob> {
         );
     }
 
+    if (payload.repoId !== undefined && typeof payload.repoId !== 'string') {
+        payload.repoId = String(payload.repoId);
+    }
+
     //Generate the Github Installation Id
     try {
         const response = await fetch(`${PRIMARY_BACKEND_URL}/github/installation-token?user_id=${payload.user_id}`)

@@ -25,7 +25,7 @@ export async function runBuildInContainer(job: BuildJob) {
   }
 
   const containerId = `build-${randomUUID()}`;
-  const repoDir = `${CONTAINER_WORKSPACE}/${job.repoName}`;
+  const repoDir = `${CONTAINER_WORKSPACE}/repo`;
 
   const localArtifactPath = path.join(os.tmpdir(), containerId);
 
@@ -42,12 +42,26 @@ export async function runBuildInContainer(job: BuildJob) {
       'sleep', 'infinity'
     ])
 
-    let cloneUrl = job.repoUrl
-
-    if (job.gitToken) {
-      cloneUrl = buildAuthenticatedUrl(job.repoName, job.gitToken)
+    // Resolve live repo name using repoId (immune to repo renaming or transfer)
+    let repoFullName = job.repoName;
+    if (job.repoId) {
+      const liveName = await getLiveRepoFullName(job.repoId, job.gitToken);
+      if (liveName) {
+        if (liveName !== job.repoName) {
+          onLog(`[git] Repository rename/transfer detected: "${job.repoName}" -> "${liveName}"`);
+        }
+        repoFullName = liveName;
+      }
     }
 
+    let cloneUrl = job.repoUrl;
+    if (job.gitToken) {
+      cloneUrl = buildAuthenticatedUrl(repoFullName, job.gitToken);
+    } else if (repoFullName !== job.repoName) {
+      cloneUrl = `https://github.com/${repoFullName}.git`;
+    }
+
+    onLog(`[git] Cloning ${repoFullName}...`);
 
     //Clone the Git Repo inside running container
     await dockerExec(containerId, [
@@ -244,4 +258,28 @@ function buildAuthenticatedUrl(repoName: string, gitToken?: string): string {
 
   const cloneUrl = `https://x-access-token:${gitToken}@github.com/${repoName}.git`
   return cloneUrl
+}
+
+async function getLiveRepoFullName(repoId: string, gitToken?: string): Promise<string | null> {
+  try {
+    const headers: Record<string, string> = {
+      Accept: 'application/vnd.github.v3+json',
+      'User-Agent': 'BlitzShip-BuildWorker',
+    };
+    if (gitToken) {
+      headers.Authorization = `Bearer ${gitToken}`;
+    }
+
+    const res = await fetch(`https://api.github.com/repositories/${repoId}`, { headers });
+    if (!res.ok) {
+      console.warn(`[git] GitHub API returned status ${res.status} when querying repoId ${repoId}`);
+      return null;
+    }
+
+    const data: any = await res.json();
+    return data.full_name || null;
+  } catch (e) {
+    console.warn(`[git] Failed to resolve repoId ${repoId} via GitHub API:`, e);
+    return null;
+  }
 }
