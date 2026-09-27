@@ -49,6 +49,20 @@ export async function runBuildInContainer(job: BuildJob) {
       if (liveName) {
         if (liveName !== job.repoName) {
           onLog(`[git] Repository rename/transfer detected: "${job.repoName}" -> "${liveName}"`);
+          try {
+            await prisma.project.updateMany({
+              where: { repoId: job.repoId },
+              data: {
+                repoName: liveName,
+                github_url: `https://github.com/${liveName}`,
+              },
+            });
+            onLog(`[git] Database updated with new repository name "${liveName}"`);
+          } catch (dbErr) {
+            console.error('[git] Failed to self-heal project repo reference in database:', dbErr);
+          }
+          job.repoName = liveName;
+          job.repoUrl = `https://github.com/${liveName}`;
         }
         repoFullName = liveName;
       }
