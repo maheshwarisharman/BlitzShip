@@ -697,7 +697,7 @@ export default function ProjectDetailsPage() {
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Deployment Overview */}
-        <Card className="col-span-1 md:col-span-2 bg-background border-border shadow-sm">
+        <Card className="col-span-1 md:col-span-3 bg-background border-border shadow-sm">
           <CardHeader className="pb-4">
             <CardTitle className="text-lg font-semibold flex items-center gap-2">
               Production Deployment
@@ -706,9 +706,9 @@ export default function ProjectDetailsPage() {
               The latest successful deployment of your default branch.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col md:flex-row gap-6">
+          <CardContent className="flex flex-col md:flex-row gap-6 md:items-stretch">
             {/* Deployment Snapshot Preview */}
-            <div className="w-full md:w-5/12 aspect-video bg-neutral-950 border border-neutral-800 rounded-lg overflow-hidden relative group">
+            <div className="w-full md:w-5/12 aspect-video md:aspect-auto min-h-[220px] bg-neutral-950 border border-neutral-800 rounded-lg overflow-hidden relative group self-stretch shrink-0">
               {project.production_deployment?.snapshot_url ? (
                 <img
                   src={project.production_deployment.snapshot_url}
@@ -716,7 +716,7 @@ export default function ProjectDetailsPage() {
                   className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
                 />
               ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center">
+                <div className="w-full h-full min-h-[220px] flex flex-col items-center justify-center">
                   <Globe className="w-10 h-10 text-neutral-700 relative z-10 mb-2" />
                   <span className="text-xs font-medium text-neutral-500">
                     No Preview Available
@@ -751,6 +751,17 @@ export default function ProjectDetailsPage() {
                   {project.build_branch}
                 </div>
               </div>
+              {project.production_deployment?.commit_message && (
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    Latest Commit
+                  </span>
+                  <div className="text-sm flex items-center gap-1.5 text-muted-foreground">
+                    <GitCommitHorizontal className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{project.production_deployment.commit_message}</span>
+                  </div>
+                </div>
+              )}
               <div className="flex flex-col gap-1.5">
                 <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                   Created At
@@ -759,48 +770,6 @@ export default function ProjectDetailsPage() {
                   {new Date(project.created_at).toLocaleDateString()} at{" "}
                   {new Date(project.created_at).toLocaleTimeString()}
                 </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Configuration Details */}
-        <Card className="col-span-1 bg-background border-border shadow-sm">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-lg font-semibold">
-              Build Settings
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-5">
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-muted-foreground">
-                Framework
-              </span>
-              <div className="text-sm font-medium flex items-center gap-2">
-                <div className="w-5 h-5 rounded-full bg-foreground text-background flex items-center justify-center font-bold text-[9px]">
-                  {project.name ? project.name.charAt(0).toUpperCase() : "N"}
-                </div>
-                Auto-detected
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5 border-t border-border pt-4">
-              <span className="text-xs font-medium text-muted-foreground">
-                Build Command
-              </span>
-              <div className="bg-neutral-900/70 text-neutral-300 font-mono text-xs p-2.5 rounded-md border border-neutral-800 flex items-center gap-2 overflow-x-auto">
-                <Terminal className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-                {project.build_cmd || "npm run build"}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5 border-t border-border pt-4">
-              <span className="text-xs font-medium text-muted-foreground">
-                Output Directory
-              </span>
-              <div className="bg-neutral-900/70 text-neutral-300 font-mono text-xs p-2.5 rounded-md border border-neutral-800 flex items-center gap-2 overflow-x-auto">
-                <Terminal className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-                {project.output_dir || "dist"}
               </div>
             </div>
           </CardContent>
@@ -1072,6 +1041,51 @@ export default function ProjectDetailsPage() {
                   })}
                 </div>
               )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Configuration Details */}
+        <Card className="col-span-1 md:col-span-3 bg-background border-border shadow-sm">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg font-semibold">
+              Build Settings
+            </CardTitle>
+            <CardDescription>
+              Configuration used to build and output your project.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">
+                Framework
+              </span>
+              <div className="text-sm font-medium flex items-center gap-2">
+                <div className="w-5 h-5 rounded-full bg-foreground text-background flex items-center justify-center font-bold text-[9px]">
+                  {project.name ? project.name.charAt(0).toUpperCase() : "N"}
+                </div>
+                Auto-detected
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5 border-t border-border pt-4 md:border-t-0 md:pt-0">
+              <span className="text-xs font-medium text-muted-foreground">
+                Build Command
+              </span>
+              <div className="bg-neutral-900/70 text-neutral-300 font-mono text-xs p-2.5 rounded-md border border-neutral-800 flex items-center gap-2 overflow-x-auto">
+                <Terminal className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                {project.build_cmd || "npm run build"}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5 border-t border-border pt-4 md:border-t-0 md:pt-0">
+              <span className="text-xs font-medium text-muted-foreground">
+                Output Directory
+              </span>
+              <div className="bg-neutral-900/70 text-neutral-300 font-mono text-xs p-2.5 rounded-md border border-neutral-800 flex items-center gap-2 overflow-x-auto">
+                <Terminal className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                {project.output_dir || "dist"}
+              </div>
             </div>
           </CardContent>
         </Card>
