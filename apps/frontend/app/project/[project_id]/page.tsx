@@ -37,6 +37,7 @@ import {
   Eye,
   EyeOff,
   ChevronDown,
+  GitCommitHorizontal,
 } from "lucide-react";
 
 import {
@@ -64,6 +65,7 @@ type Deployment = {
   created_at: string;
   build_logs: string | null;
   is_production?: boolean;
+  commit_message: string | null;
 };
 
 type CustomDomainStatus =
@@ -1474,11 +1476,21 @@ export default function ProjectDetailsPage() {
                             <span className="opacity-50">-</span>
                           )}
                         </div>
-                        <div className="hidden md:flex md:col-span-3 font-mono text-muted-foreground items-center gap-1.5 truncate">
-                          <GitBranch className="w-3.5 h-3.5 shrink-0" />
-                          <span className="truncate">
-                            {project.build_branch || "main"}
-                          </span>
+                        <div className="hidden md:flex md:col-span-3 font-mono text-muted-foreground items-start gap-1.5 truncate flex-col justify-center">
+                          <div className="flex items-center gap-1.5 w-full truncate">
+                            <GitBranch className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate">
+                              {project.build_branch || "main"}
+                            </span>
+                          </div>
+                          {deployment.commit_message && (
+                            <div className="flex items-center gap-1.5 w-full truncate pl-0.5">
+                              <GitCommitHorizontal className="w-3 h-3 shrink-0 opacity-50" />
+                              <span className="truncate text-xs opacity-50 font-sans">
+                                {deployment.commit_message}
+                              </span>
+                            </div>
+                          )}
                         </div>
                         <div className="col-span-3 md:col-span-2 text-muted-foreground text-right truncate text-xs flex items-center justify-end">
                           {new Date(deployment.created_at).toLocaleDateString()}
