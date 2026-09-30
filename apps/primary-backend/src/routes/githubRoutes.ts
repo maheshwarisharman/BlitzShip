@@ -3,6 +3,8 @@ import axios from 'axios'
 import { prisma } from '@repo/db'
 import jwt from 'jsonwebtoken'
 import { getAuth, requireAuth } from "@clerk/express"
+import crypto from 'crypto'
+import { triggerDeployment } from '../services/triggerDeployment.js'
 
 const router: Router = Router()
 
@@ -56,6 +58,29 @@ async function getInstallationAccessToken(installationId: string): Promise<strin
 
     return response.data.token
 }
+
+// ─── Webhook Signature Verification ─────────────────────────────────
+/**
+ * Verifies the HMAC-SHA256 signature GitHub sends on every webhook delivery.
+ * Uses timing-safe comparison to prevent timing attacks.
+ *
+ * GitHub signs the raw request body with the webhook secret configured in
+ * the GitHub App settings (stored as GITHUB_WEBHOOK_SECRET in .env).
+ * express.raw() must be used on this route so the raw Buffer is available.
+ */
+function verifyGithubSignature(rawBody: Buffer, secret: string, sigHeader: string | undefined): boolean {
+    if (!sigHeader) return false
+    const hmac = crypto.createHmac('sha256', secret)
+    hmac.update(rawBody)
+    const expected = `sha256=${hmac.digest('hex')}`
+    try {
+        return crypto.timingSafeEqual(Buffer.from(sigHeader), Buffer.from(expected))
+    } catch {
+        // timingSafeEqual throws if buffers differ in length
+        return false
+    }
+}
+
 
 // ─── Routes ──────────────────────────────────────────────────────────
 
@@ -223,11 +248,85 @@ router.get('/is-github-linked', requireAuth(), async(req: Request, res: Response
  * Stores the installation_id linked to the user for future token generation.
  */
 router.post('/webhook', async (req: Request, res: Response) => {
+    // ── Signature verification ────────────────────────────────────────────
+    // express.raw() delivers the body as a Buffer on this route.
+    // We must verify before parsing so we reject tampered payloads early.
+    const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET
+    if (!webhookSecret) {
+        console.error('[github-app] GITHUB_WEBHOOK_SECRET is not set')
+        return res.status(500).json({ success: false, error: 'Webhook secret not configured' })
+    }
+
+    const rawBody = req.body as Buffer
+    const sigHeader = req.headers['x-hub-signature-256'] as string | undefined
+
+    if (!verifyGithubSignature(rawBody, webhookSecret, sigHeader)) {
+        console.warn('[github-app] Webhook signature verification failed')
+        return res.status(401).json({ success: false, error: 'Invalid webhook signature' })
+    }
+
+    // Parse the raw body now that it is verified
+    let payload: any
+    try {
+        payload = JSON.parse(rawBody.toString('utf-8'))
+    } catch {
+        return res.status(400).json({ success: false, error: 'Invalid JSON body' })
+    }
+
     const event = req.headers['x-github-event'] as string
-    const { action, installation, sender } = req.body
+    const { action, installation, sender } = payload
 
     try {
-        // We only care about installation-related events
+        // ── push events → auto-deployment ────────────────────────────────
+        if (event === 'push') {
+            const ref: string    = payload.ref                          // e.g. "refs/heads/main"
+            const repoId: string = String(payload.repository?.id ?? '') // GitHub numeric repo ID
+            const branch: string = ref.replace('refs/heads/', '')       // e.g. "main"
+
+            // Ignore tag pushes (refs/tags/...) — they won't match any build_branch
+            if (!ref.startsWith('refs/heads/')) {
+                return res.status(200).json({ success: true, message: 'Tag push ignored' })
+            }
+
+            console.log(`[github-app] push event: repo=${repoId} branch=${branch}`)
+
+            // Find all projects that watch this repo + branch combination
+            const projects = await prisma.project.findMany({
+                where: { repoId, build_branch: branch }
+            })
+
+            if (projects.length === 0) {
+                console.log(`[github-app] No projects configured for repo=${repoId} branch=${branch}`)
+                return res.status(200).json({ success: true, message: 'No matching project' })
+            }
+
+            // Trigger a deployment for every matching project (usually just one)
+            const results = await Promise.allSettled(
+                projects.map(p => triggerDeployment(p.project_id))
+            )
+
+            const triggered: number[] = []
+            const failed: string[]    = []
+
+            results.forEach((result, i) => {
+                if (result.status === 'fulfilled') {
+                    triggered.push(result.value.deployment_id)
+                    console.log(`[github-app] Auto-deployment ${result.value.deployment_id} triggered for project ${projects[i]!.project_id} (${projects[i]!.repoName}@${branch})`)
+                } else {
+                    failed.push(`project_id=${projects[i]!.project_id}: ${result.reason}`)
+                    console.error(`[github-app] Failed to trigger deployment for project ${projects[i]!.project_id}:`, result.reason)
+                }
+            })
+
+            return res.status(200).json({
+                success: true,
+                message: `Triggered ${triggered.length} deployment(s)`,
+                deployment_ids: triggered,
+                ...(failed.length > 0 ? { errors: failed } : {})
+            })
+        }
+
+        // ── installation events ───────────────────────────────────────────
         if (event === 'installation') {
             const installationId = String(installation.id)
             const githubUsername = sender.login as string
@@ -295,6 +394,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
         })
     }
 })
+
 
 /*
  * GET /get-repos - Fetch user's GitHub repos using a GitHub App Installation Access Token.

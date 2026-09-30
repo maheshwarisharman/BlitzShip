@@ -698,7 +698,6 @@ export default function ProjectDetailsPage() {
         <Card className="col-span-1 md:col-span-2 bg-background border-border shadow-sm">
           <CardHeader className="pb-4">
             <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <Activity className="w-5 h-5 text-muted-foreground" />
               Production Deployment
             </CardTitle>
             <CardDescription>

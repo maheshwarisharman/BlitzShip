@@ -1,16 +1,12 @@
 import { Router } from "express";
 import { prisma } from '@repo/db'
-import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs'
 import { validate } from '../middleware/validate.middleware.js'
 import { createNewProjectSchema, createDeploymentSchema } from "../schemas/deployment.schema.js";
-import type { BuildJob } from '@repo/types'
 import { getAuth } from "@clerk/express";
-import { encryptEnvMap, decryptEnvMap } from '@repo/env-crypto'
+import { encryptEnvMap } from '@repo/env-crypto'
+import { triggerDeployment } from '../services/triggerDeployment.js'
 
 const router: Router = Router()
-
-const sqs = new SQSClient({ region: process.env.AWS_REGION })
-const QUEUE_URL = process.env.SQS_QUEUE_URL!
 
 router.post('/create-project', validate(createNewProjectSchema), async (req, res) => {
 
@@ -176,60 +172,26 @@ router.post('/create-deployment', validate(createDeploymentSchema), async (req, 
     }
 
     try {
-
+        // Verify the project exists and belongs to this user before dispatching
         const project = await prisma.project.findUniqueOrThrow({
             where: { project_id: body.project_id }
         })
 
-        if(project.user_id !== clerkUserId) {
+        if (project.user_id !== clerkUserId) {
             return res.status(401).json({
                 message: "Unauthorized",
             })
         }
 
-        const deployment = await prisma.deployment.create({
-            data: {
-                project_id: body.project_id,
-            }
-        })
-
-        const encryptedEnv = project.project_env
-            ? (project.project_env as Record<string, string>)
-            : {}
-
-        // Decrypt in-memory here — plaintext values are never re-persisted
-        const envVars: Record<string, string> = Object.keys(encryptedEnv).length > 0
-            ? decryptEnvMap(encryptedEnv)
-            : {}
-
-        const job: BuildJob = {
-            id: deployment.deployment_id,
-            repoId: project.repoId,
-            repoName: project.repoName,
-            repoUrl: project.github_url,
-            buildCommand: project.build_cmd,
-            buildOutDir: project.output_dir,
-            user_id: project.user_id,
-            envVars: Object.keys(envVars).length > 0 ? envVars : undefined,
-        }
-
-        await sqs.send(
-            new SendMessageCommand({
-                QueueUrl: QUEUE_URL,
-                MessageBody: JSON.stringify(job),
-            })
-        )
-
-        console.log(`[deploy] Queued build job ${job.id} for project "${job.repoName}"`)
+        const { deployment_id } = await triggerDeployment(body.project_id)
 
         res.status(200).json({
             message: "Deployment created and build job queued",
-            data: { deployment, jobId: job.id }
+            data: { deployment_id, jobId: deployment_id }
         })
 
     } catch (e) {
         console.log(e);
-        
         res.status(500).json({
             message: "Some Error occured",
             error: e

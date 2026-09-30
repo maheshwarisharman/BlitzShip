@@ -16,7 +16,13 @@ const app: Express = express();
 app.use(cors({
   origin: "*"
 }));
+
+// Raw body required for HMAC signature verification on the GitHub webhook endpoint.
+// This MUST be registered before express.json() so the buffer is available.
+app.use('/github/webhook', express.raw({ type: 'application/json' }))
+
 app.use(express.json());
+
 
 app.use(clerkMiddleware());
 
