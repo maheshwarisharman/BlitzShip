@@ -58,6 +58,7 @@ model Deployment {
   preview_url      String?
   build_logs       String?
   snapshot_url     String?   // S3 object key for the visual screenshot (fetch via presigned URL)
+  commit_message   String?   // Populated only for auto-deployments triggered by a GitHub push webhook
 
   production_for   Project? @relation("ProductionDeployment")
 }

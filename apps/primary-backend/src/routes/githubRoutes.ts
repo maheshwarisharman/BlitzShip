@@ -290,6 +290,9 @@ router.post('/webhook', async (req: Request, res: Response) => {
 
             console.log(`[github-app] push event: repo=${repoId} branch=${branch}`)
 
+            // Extract the latest commit message from the push payload
+            const commitMessage: string | undefined = payload.head_commit?.message
+
             // Find all projects that watch this repo + branch combination
             const projects = await prisma.project.findMany({
                 where: { repoId, build_branch: branch }
@@ -302,7 +305,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
 
             // Trigger a deployment for every matching project (usually just one)
             const results = await Promise.allSettled(
-                projects.map(p => triggerDeployment(p.project_id))
+                projects.map(p => triggerDeployment(p.project_id, commitMessage))
             )
 
             const triggered: number[] = []

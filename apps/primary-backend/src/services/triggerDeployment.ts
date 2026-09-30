@@ -11,16 +11,25 @@ const QUEUE_URL = process.env.SQS_QUEUE_URL!
  * This is the single source of truth for dispatching a build — used by both
  * the manual deploy route and the GitHub webhook push handler.
  *
- * @param project_id  The project to deploy (must already exist in DB)
- * @returns           The newly-created deployment_id
+ * @param project_id    The project to deploy (must already exist in DB)
+ * @param commitMessage Optional — populated for GitHub push webhook auto-deployments only.
+ *                      Left null for manually triggered deployments.
+ * @returns             The newly-created deployment_id
  */
-export async function triggerDeployment(project_id: number): Promise<{ deployment_id: number }> {
+export async function triggerDeployment(
+    project_id: number,
+    commitMessage?: string
+): Promise<{ deployment_id: number }> {
     const project = await prisma.project.findUniqueOrThrow({
         where: { project_id }
     })
 
     const deployment = await prisma.deployment.create({
-        data: { project_id }
+        data: {
+            project_id,
+            // Only written when called from the webhook path; null for manual deploys
+            ...(commitMessage ? { commit_message: commitMessage } : {})
+        }
     })
 
     const encryptedEnv = project.project_env
