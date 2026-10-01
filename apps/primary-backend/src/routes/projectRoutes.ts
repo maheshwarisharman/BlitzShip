@@ -235,6 +235,89 @@ router.get("/env", async (req, res) => {
   }
 });
 
+router.put("/build-settings", async (req, res) => {
+  const auth = getAuth(req);
+  const clerkUserId = auth.userId;
+
+  if (!clerkUserId) {
+    return res.status(401).json({
+      message: "Unauthorized",
+    });
+  }
+
+  const { project_id, build_cmd, output_dir } = req.body;
+
+  if (!project_id) {
+    return res.status(400).json({
+      message: "project_id is required",
+    });
+  }
+
+  if (build_cmd === undefined && output_dir === undefined) {
+    return res.status(400).json({
+      message: "At least one of build_cmd or output_dir must be provided",
+    });
+  }
+
+  const updateData: { build_cmd?: string; output_dir?: string } = {};
+
+  if (build_cmd !== undefined) {
+    if (typeof build_cmd !== "string") {
+      return res.status(400).json({
+        message: "build_cmd must be a string",
+      });
+    }
+    updateData.build_cmd = build_cmd;
+  }
+
+  if (output_dir !== undefined) {
+    if (typeof output_dir !== "string") {
+      return res.status(400).json({
+        message: "output_dir must be a string",
+      });
+    }
+    updateData.output_dir = output_dir;
+  }
+
+  try {
+    const project = await prisma.project.findUnique({
+      where: { project_id: Number(project_id) },
+      select: { user_id: true },
+    });
+
+    if (!project) {
+      return res.status(404).json({
+        message: "Project not found",
+      });
+    }
+
+    if (project.user_id !== clerkUserId) {
+      return res.status(403).json({
+        message: "Forbidden: you do not own this project",
+      });
+    }
+
+    const updatedProject = await prisma.project.update({
+      where: { project_id: Number(project_id) },
+      data: updateData,
+    });
+
+    res.status(200).json({
+      message: "Build settings updated successfully",
+      data: {
+        ...updatedProject,
+        project_env: undefined,
+      },
+    });
+  } catch (e) {
+    console.log(e);
+    res.status(500).json({
+      message: "Some error occured",
+      error: e,
+    });
+  }
+});
+
 router.delete("/delete", async (req, res) => {
   try {
     const projectId = req.body.project_id;
