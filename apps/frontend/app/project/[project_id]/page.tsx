@@ -38,6 +38,7 @@ import {
   EyeOff,
   ChevronDown,
   GitCommitHorizontal,
+  Pencil,
 } from "lucide-react";
 
 import {
@@ -134,6 +135,57 @@ export default function ProjectDetailsPage() {
   const [isDeletingProject, setIsDeletingProject] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isMarkingProduction, setIsMarkingProduction] = useState<number | null>(null);
+
+  // Build settings state
+  const [isEditingBuildSettings, setIsEditingBuildSettings] = useState(false);
+  const [editBuildCmd, setEditBuildCmd] = useState("");
+  const [editOutputDir, setEditOutputDir] = useState("");
+  const [isSavingBuildSettings, setIsSavingBuildSettings] = useState(false);
+
+  const handleSaveBuildSettings = async () => {
+    if (!params.project_id || !project) return;
+    if (!editBuildCmd.trim() && !editOutputDir.trim()) {
+      toast.error("Build command or output directory must be provided");
+      return;
+    }
+
+    try {
+      setIsSavingBuildSettings(true);
+      const token = await getToken();
+      const response = await axios.put(
+        `${API_BASE_URL}/projects/build-settings`,
+        {
+          project_id: Number(params.project_id),
+          build_cmd: editBuildCmd.trim(),
+          output_dir: editOutputDir.trim(),
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const updated = response.data.data;
+      setProject((prev) =>
+        prev
+          ? {
+              ...prev,
+              build_cmd: updated.build_cmd,
+              output_dir: updated.output_dir,
+            }
+          : prev
+      );
+      setIsEditingBuildSettings(false);
+      toast.success("Build settings updated successfully");
+    } catch (err: unknown) {
+      console.error("Error updating build settings:", err);
+      const message = axios.isAxiosError(err)
+        ? (err.response?.data as { message?: string } | undefined)?.message || err.message
+        : err instanceof Error
+          ? err.message
+          : "Failed to update build settings.";
+      toast.error(message);
+    } finally {
+      setIsSavingBuildSettings(false);
+    }
+  };
 
   // Env editor state
   const [isEnvModalOpen, setIsEnvModalOpen] = useState(false);
@@ -1047,13 +1099,57 @@ export default function ProjectDetailsPage() {
 
         {/* Configuration Details */}
         <Card className="col-span-1 md:col-span-3 bg-background border-border shadow-sm">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-lg font-semibold">
-              Build Settings
-            </CardTitle>
-            <CardDescription>
-              Configuration used to build and output your project.
-            </CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between pb-4">
+            <div className="flex flex-col gap-1">
+              <CardTitle className="text-lg font-semibold">
+                Build Settings
+              </CardTitle>
+              <CardDescription>
+                Configuration used to build and output your project.
+              </CardDescription>
+            </div>
+            {!isEditingBuildSettings ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs"
+                onClick={() => {
+                  setEditBuildCmd(project.build_cmd || "npm run build");
+                  setEditOutputDir(project.output_dir || "dist");
+                  setIsEditingBuildSettings(true);
+                }}
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                Edit
+              </Button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs"
+                  disabled={isSavingBuildSettings}
+                  onClick={() => setIsEditingBuildSettings(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  className="text-xs gap-1.5 bg-white text-black hover:bg-neutral-200"
+                  disabled={isSavingBuildSettings}
+                  onClick={handleSaveBuildSettings}
+                >
+                  {isSavingBuildSettings ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    "Save"
+                  )}
+                </Button>
+              </div>
+            )}
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="flex flex-col gap-1.5">
@@ -1072,20 +1168,46 @@ export default function ProjectDetailsPage() {
               <span className="text-xs font-medium text-muted-foreground">
                 Build Command
               </span>
-              <div className="bg-neutral-900/70 text-neutral-300 font-mono text-xs p-2.5 rounded-md border border-neutral-800 flex items-center gap-2 overflow-x-auto">
-                <Terminal className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-                {project.build_cmd || "npm run build"}
-              </div>
+              {isEditingBuildSettings ? (
+                <div className="relative flex items-center">
+                  <Terminal className="w-3.5 h-3.5 absolute left-3 text-muted-foreground pointer-events-none" />
+                  <Input
+                    value={editBuildCmd}
+                    onChange={(e) => setEditBuildCmd(e.target.value)}
+                    placeholder="npm run build"
+                    className="bg-neutral-900/70 text-neutral-300 font-mono text-xs pl-8 border-neutral-800 h-9"
+                    disabled={isSavingBuildSettings}
+                  />
+                </div>
+              ) : (
+                <div className="bg-neutral-900/70 text-neutral-300 font-mono text-xs p-2.5 rounded-md border border-neutral-800 flex items-center gap-2 overflow-x-auto">
+                  <Terminal className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                  {project.build_cmd || "npm run build"}
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col gap-1.5 border-t border-border pt-4 md:border-t-0 md:pt-0">
               <span className="text-xs font-medium text-muted-foreground">
                 Output Directory
               </span>
-              <div className="bg-neutral-900/70 text-neutral-300 font-mono text-xs p-2.5 rounded-md border border-neutral-800 flex items-center gap-2 overflow-x-auto">
-                <Terminal className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-                {project.output_dir || "dist"}
-              </div>
+              {isEditingBuildSettings ? (
+                <div className="relative flex items-center">
+                  <Terminal className="w-3.5 h-3.5 absolute left-3 text-muted-foreground pointer-events-none" />
+                  <Input
+                    value={editOutputDir}
+                    onChange={(e) => setEditOutputDir(e.target.value)}
+                    placeholder="dist"
+                    className="bg-neutral-900/70 text-neutral-300 font-mono text-xs pl-8 border-neutral-800 h-9"
+                    disabled={isSavingBuildSettings}
+                  />
+                </div>
+              ) : (
+                <div className="bg-neutral-900/70 text-neutral-300 font-mono text-xs p-2.5 rounded-md border border-neutral-800 flex items-center gap-2 overflow-x-auto">
+                  <Terminal className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                  {project.output_dir || "dist"}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
