@@ -43,7 +43,7 @@ function DeployTerminal() {
   }, [reduce]);
 
   return (
-    <div className="w-full overflow-hidden rounded-xl border border-white/10 bg-ink font-mono text-[11px] leading-5 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)]">
+    <div className="w-full overflow-hidden rounded-xl border border-white/15 bg-ink/45 font-mono text-[11px] leading-5 backdrop-blur-md">
       <div className="flex items-center gap-1.5 border-b border-white/10 px-3 py-2">
         <span className="size-2 rounded-full bg-white/15" />
         <span className="size-2 rounded-full bg-white/15" />
@@ -119,7 +119,7 @@ const SLIDES = [
 function FeatureCard({ index }: { index: number }) {
   const slide = SLIDES[index];
   return (
-    <div className="w-full max-w-[250px] rounded-xl border border-bolt-soft/20 bg-[#0f2257] p-4">
+    <div className="w-full max-w-[250px] rounded-xl border border-bolt-soft/25 bg-[#1a3a8f]/30 p-4 backdrop-blur-md">
       <div className="mb-6 grid w-fit grid-cols-3 gap-x-2 gap-y-2">
         {Array.from({ length: 9 }).map((_, i) => (
           <span
@@ -192,7 +192,7 @@ export function HeroVisual() {
             type="button"
             aria-label="Previous feature"
             onClick={() => go(-1)}
-            className="grid size-10 place-items-center rounded-lg border border-bolt-soft/25 bg-[#0f2257] text-bolt-soft transition hover:bg-bolt hover:text-white"
+            className="grid size-10 place-items-center rounded-lg border border-bolt-soft/25 bg-[#1a3a8f]/30 backdrop-blur-md text-bolt-soft transition hover:bg-bolt hover:text-white"
           >
             <ArrowLeft className="size-4" />
           </button>
@@ -200,7 +200,7 @@ export function HeroVisual() {
             type="button"
             aria-label="Next feature"
             onClick={() => go(1)}
-            className="grid size-10 place-items-center rounded-lg border border-bolt-soft/25 bg-[#0f2257] text-bolt-soft transition hover:bg-bolt hover:text-white"
+            className="grid size-10 place-items-center rounded-lg border border-bolt-soft/25 bg-[#1a3a8f]/30 backdrop-blur-md text-bolt-soft transition hover:bg-bolt hover:text-white"
           >
             <ArrowRight className="size-4" />
           </button>
