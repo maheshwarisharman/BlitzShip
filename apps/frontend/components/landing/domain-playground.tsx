@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Check, Lock } from "lucide-react";
+import { useReducedMotion } from "./use-reduced-motion";
 
 type Mode = "platform" | "custom";
 
@@ -26,24 +27,21 @@ export function DomainPlayground() {
   const [mode, setMode] = useState<Mode>("platform");
   const [name, setName] = useState("acme");
   const [domain, setDomain] = useState("acme.com");
-  const [step, setStep] = useState(0);
+  const reduce = useReducedMotion();
+  const [animatedStep, setStep] = useState(0);
+  const step = reduce ? PIPELINE.length : animatedStep;
+
+  const switchMode = (next: Mode) => {
+    setStep(0);
+    setMode(next);
+  };
 
   // Cycle the custom-domain pipeline so people can see the whole journey.
   useEffect(() => {
-    if (mode !== "custom") return;
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) {
-      setStep(PIPELINE.length);
-      return;
-    }
-    setStep(0);
-    let n = 0;
-    const id = setInterval(() => {
-      n = n >= PIPELINE.length + 1 ? 0 : n + 1;
-      setStep(n);
-    }, 1500);
+    if (mode !== "custom" || reduce) return;
+    const id = setInterval(() => setStep((n) => (n >= PIPELINE.length + 1 ? 0 : n + 1)), 1500);
     return () => clearInterval(id);
-  }, [mode]);
+  }, [mode, reduce]);
 
   const shownName = name || "yourname";
   const shownDomain = domain || "yourbrand.com";
@@ -63,7 +61,7 @@ export function DomainPlayground() {
             <button
               key={key}
               type="button"
-              onClick={() => setMode(key)}
+              onClick={() => switchMode(key)}
               className={`rounded-md px-3.5 py-2 transition-colors ${
                 mode === key ? "bg-bolt text-white" : "text-white/50 hover:text-white"
               }`}
