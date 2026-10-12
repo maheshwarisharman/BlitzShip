@@ -144,9 +144,9 @@ export default function Home() {
               <div>
                 <p className={eyebrow}>/01 — How it works</p>
                 <h2 className="mt-4 max-w-2xl font-mono text-[clamp(1.9rem,3.8vw,3.2rem)] uppercase leading-[1.05] tracking-tight">
-                  Three steps.
+                  Go live in
                   <br />
-                  <span className="font-serif text-[1.25em] normal-case italic text-bolt-soft">zero</span> yak shaving.
+                  <span className="font-serif text-[1.25em] normal-case italic text-bolt-soft">three steps.</span>
                 </h2>
               </div>
               <p className="max-w-sm text-[15px] leading-relaxed text-white/55">
@@ -256,9 +256,9 @@ export default function Home() {
               <div>
                 <p className={eyebrow}>/02 — Domains</p>
                 <h2 className="mt-4 font-mono text-[clamp(1.9rem,3.8vw,3.2rem)] uppercase leading-[1.05] tracking-tight">
-                  Your name.
+                  Free subdomain
                   <br />
-                  <span className="font-serif text-[1.25em] normal-case italic text-bolt-soft">or yours.</span>
+                  <span className="font-serif text-[1.25em] normal-case italic text-bolt-soft">or your own domain.</span>
                 </h2>
               </div>
               <p className="max-w-sm text-[15px] leading-relaxed text-white/55">
