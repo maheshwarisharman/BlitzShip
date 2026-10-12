@@ -150,7 +150,7 @@ export function ProjectCard({ project, index = 0 }: { project: Project; index?: 
                 isLive ? "bg-emerald-400" : "bg-amber-400"
               )}
             />
-            {isLive ? `Production · #${project.production_deployment_id}` : "No production deploy"}
+            {isLive ? `Production` : "No production deploy"}
           </p>
         </div>
 
