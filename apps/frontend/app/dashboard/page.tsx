@@ -1,17 +1,16 @@
 "use client"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { ProjectCard, ProjectCardSkeleton, type Project } from "@/components/project-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Github, MoreHorizontal, ExternalLink, Loader2, AlertCircle, X, Check, GitBranch } from "lucide-react";
+import { Search, Github, Loader2, AlertCircle, X, Check, GitBranch } from "lucide-react";
 import axios from "axios"
 import  {useEffect, useRef, useState} from "react"
 import { useAuth } from "@clerk/nextjs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 export default function DashboardPage() {
@@ -21,7 +20,7 @@ export default function DashboardPage() {
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL
     const GITHUB_APP_NAME = process.env.NEXT_PUBLIC_GITHUB_APP_NAME
 
-    const [projects, setProjects] = useState<any[]>([])
+    const [projects, setProjects] = useState<Project[]>([])
     const [skeletonCount, setSkeletonCount] = useState(3)
     const latestFetchIdRef = useRef(0)
     const [githubRepos, setGithubRepos] = useState<any[]>([])
@@ -357,88 +356,33 @@ export default function DashboardPage() {
 
       {/* Projects Grid or Loading State */}
       {isFetchingProjects ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {Array.from({ length: skeletonCount }, (_, i) => i).map((i) => (
-            <Card key={i} className="flex flex-col justify-between overflow-hidden bg-background border-border shadow-sm">
-              <CardHeader className="flex flex-row items-start justify-between space-y-0 p-5 pb-4">
-                <div className="flex flex-col gap-3 w-full">
-                  <div className="flex items-center gap-3">
-                    <div className="w-6 h-6 rounded-full bg-neutral-800 animate-pulse"></div>
-                    <div className="h-5 w-32 bg-neutral-800 rounded animate-pulse"></div>
-                  </div>
-                  <div className="h-4 w-48 bg-neutral-800 rounded animate-pulse"></div>
-                </div>
-              </CardHeader>
-              <CardContent className="p-5 pt-0 flex-1">
-                <div className="flex flex-col gap-3 mt-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-neutral-800 animate-pulse"></div>
-                    <div className="h-4 w-20 bg-neutral-800 rounded animate-pulse"></div>
-                    <div className="h-4 w-24 bg-neutral-800 rounded animate-pulse"></div>
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter className="p-5 border-t border-border bg-neutral-950/30 flex items-center justify-between">
-                <div className="h-4 w-28 bg-neutral-800 rounded animate-pulse"></div>
-                <div className="h-5 w-16 bg-neutral-800 rounded animate-pulse"></div>
-              </CardFooter>
-            </Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {Array.from({ length: skeletonCount }, (_, i) => (
+            <ProjectCardSkeleton key={i} index={i} />
           ))}
         </div>
       ) : projects.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 gap-4 w-full border border-border/40 rounded-xl bg-neutral-900/10 hover:border-border/60 transition-colors">
-          <div className="w-12 h-12 rounded-full bg-neutral-800/50 border border-neutral-700/50 flex items-center justify-center">
-            <Github className="w-5 h-5 text-muted-foreground" />
+        <div className="relative flex flex-col items-center justify-center py-24 gap-5 w-full overflow-hidden rounded-[28px] border border-dashed border-white/10 bg-card/40">
+          <div aria-hidden className="pointer-events-none absolute -top-24 left-1/2 h-48 w-80 -translate-x-1/2 rounded-full bg-emerald-400/10 blur-3xl" />
+          <div className="relative w-14 h-14 rounded-2xl bg-card ring-1 ring-white/10 flex items-center justify-center shadow-lg">
+            <Github className="w-6 h-6 text-foreground" />
           </div>
-          <div className="text-center max-w-sm">
-            <h3 className="font-medium text-base text-foreground">No projects found</h3>
-            <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">You haven't deployed any projects yet. Import a GitHub repository to get started.</p>
+          <div className="relative text-center max-w-sm">
+            <h3 className="font-display font-semibold text-xl tracking-tight text-foreground">Nothing shipped yet</h3>
+            <p className="text-sm text-muted-foreground mt-2 leading-relaxed">Import a GitHub repository and your first deployment will be live in minutes.</p>
           </div>
+          <Button
+            onClick={handleAddNewProject}
+            disabled={isLoadingNewProject}
+            className="relative h-10 px-5 rounded-xl bg-foreground text-background hover:bg-white font-medium"
+          >
+            Import a repository
+          </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {projects.map((project) => (
-            <Card key={project.name} className="flex flex-col justify-between overflow-hidden bg-background border-border shadow-sm hover:border-neutral-700 transition-colors">
-              <CardHeader className="flex flex-row items-start justify-between space-y-0 p-5 pb-4">
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-3 mb-1">
-                    {/* Framework icon placeholder */}
-                    <div className="w-6 h-6 rounded-full bg-foreground text-background flex items-center justify-center font-bold text-[10px]">
-                      N
-                    </div>
-                    <Link href={`/project/${project.project_id}`}>
-                      <CardTitle className="text-sm font-semibold tracking-tight hover:underline cursor-pointer">{project.name}</CardTitle>
-                    </Link>
-                  </div>
-                  <CardDescription className="text-[13px] text-muted-foreground font-medium flex items-center gap-1.5 hover:text-foreground hover:underline cursor-pointer transition-colors max-w-fit">
-                    {project.primary_domain} <ExternalLink className="w-3 h-3" />
-                  </CardDescription>
-                </div>
-                <Button variant="ghost" size="icon" className="h-8 w-8 -mt-1 -mr-2 text-muted-foreground hover:text-foreground">
-                  <MoreHorizontal className="w-4 h-4" />
-                </Button>
-              </CardHeader>
-              <CardContent className="p-5 pt-0 flex-1">
-                <div className="flex flex-col gap-3 text-sm mt-3">
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                    <span className="font-medium text-[13px]">Production</span>
-                    <span className="text-neutral-600 px-1">•</span>
-                    <span className="text-[13px]">{new Date(project.created_at).toLocaleDateString()}</span>
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter className="p-5 border-t border-border bg-neutral-950/30 text-xs text-muted-foreground flex items-center justify-between">
-                <div className="flex items-center gap-2 font-mono truncate max-w-[70%]">
-                  <Github className="w-4 h-4 text-foreground shrink-0" />
-                  <span className="truncate">{project.repoName}</span>
-                </div>
-                <div className="flex items-center gap-1.5 border border-border px-2 py-0.5 rounded-md bg-transparent text-[11px] font-mono shrink-0">
-                  <svg viewBox="0 0 24 24" fill="none" className="w-3 h-3 text-muted-foreground"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  {project.build_branch}
-                </div>
-              </CardFooter>
-            </Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {projects.map((project, i) => (
+            <ProjectCard key={project.project_id} project={project} index={i} />
           ))}
         </div>
       )}
