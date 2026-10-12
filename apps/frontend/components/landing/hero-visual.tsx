@@ -118,8 +118,8 @@ const SLIDES = [
 function FeatureCard({ index }: { index: number }) {
   const slide = SLIDES[index];
   return (
-    <div className="w-full max-w-[290px] rounded-xl border border-bolt-soft/20 bg-[#0f2257] p-4">
-      <div className="mb-8 grid w-fit grid-cols-3 gap-x-2 gap-y-2">
+    <div className="w-full max-w-[250px] rounded-xl border border-bolt-soft/20 bg-[#0f2257] p-4">
+      <div className="mb-6 grid w-fit grid-cols-3 gap-x-2 gap-y-2">
         {Array.from({ length: 9 }).map((_, i) => (
           <span
             key={i}
@@ -161,20 +161,20 @@ export function HeroVisual() {
       <AsciiBolt className="absolute inset-0" />
 
       {/* corner registration marks */}
-      {["left-3 top-3", "right-3 top-3", "left-3 bottom-3", "right-3 bottom-3"].map((pos) => (
+      {["left-1.5 top-1.5", "right-1.5 top-1.5", "left-1.5 bottom-1.5", "right-1.5 bottom-1.5"].map((pos) => (
         <span key={pos} className={`pointer-events-none absolute ${pos} font-mono text-[10px] text-bolt-soft/40`}>
           +
         </span>
       ))}
 
-      <div className="pointer-events-none absolute inset-x-4 top-4 flex justify-end sm:inset-x-6 sm:top-6">
-        <div className="pointer-events-auto w-full max-w-[330px]">
+      <div className="pointer-events-none absolute inset-x-4 bottom-4 flex justify-end sm:inset-x-6 sm:bottom-6">
+        <div className="pointer-events-auto w-full max-w-[310px]">
           <DeployTerminal />
         </div>
       </div>
 
       <div
-        className="absolute inset-x-4 bottom-4 flex items-end justify-between gap-4 sm:inset-x-6 sm:bottom-6"
+        className="absolute inset-x-4 top-4 flex items-start justify-between gap-4 sm:inset-x-6 sm:top-6"
         onMouseEnter={() => setPaused(true)}
         onMouseLeave={() => setPaused(false)}
       >

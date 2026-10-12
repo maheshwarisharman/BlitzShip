@@ -104,9 +104,9 @@ export function AsciiBolt({ className }: { className?: string }) {
       rows = Math.ceil(height / CELL_H);
 
       // Project the logo polygon into canvas space.
-      boltSize = Math.min(width * 0.92, height * 0.98);
+      boltSize = Math.min(width * 1.25, height * 0.98);
       const s = boltSize / 100;
-      const cx = width * 0.5;
+      const cx = width * 0.56;
       const cy = height * 0.5;
       const poly = BOLT_POINTS.map(
         ([x, y]) => [cx + (x - 48) * s, cy + (y - 50) * s] as [number, number],
