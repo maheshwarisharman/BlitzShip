@@ -25,9 +25,6 @@ export default function Home() {
             <Link href="/" aria-label="BlitzShip home">
               <Wordmark />
             </Link>
-            <span className="hidden font-mono text-[10px] uppercase tracking-[0.2em] text-white/35 sm:block">
-              React deploys, solved
-            </span>
           </div>
 
           <div className="flex h-16 items-center justify-end gap-2 rounded-2xl border border-line bg-panel-2 px-3 lg:justify-between lg:px-4">
