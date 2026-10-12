@@ -356,13 +356,13 @@ export default function DashboardPage() {
 
       {/* Projects Grid or Loading State */}
       {isFetchingProjects ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: skeletonCount }, (_, i) => (
             <ProjectCardSkeleton key={i} index={i} />
           ))}
         </div>
       ) : projects.length === 0 ? (
-        <div className="relative flex flex-col items-center justify-center py-24 gap-5 w-full overflow-hidden rounded-[28px] border border-dashed border-white/10 bg-card/40">
+        <div className="relative flex flex-col items-center justify-center py-24 gap-5 w-full overflow-hidden rounded-2xl border border-dashed border-white/10 bg-card/40">
           <div aria-hidden className="pointer-events-none absolute -top-24 left-1/2 h-48 w-80 -translate-x-1/2 rounded-full bg-emerald-400/10 blur-3xl" />
           <div className="relative w-14 h-14 rounded-2xl bg-card ring-1 ring-white/10 flex items-center justify-center shadow-lg">
             <Github className="w-6 h-6 text-foreground" />
@@ -380,7 +380,7 @@ export default function DashboardPage() {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {projects.map((project, i) => (
             <ProjectCard key={project.project_id} project={project} index={i} />
           ))}
