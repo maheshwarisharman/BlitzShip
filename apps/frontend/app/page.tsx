@@ -115,28 +115,6 @@ export default function Home() {
           <HeroVisual />
         </section>
 
-        {/* ───────────────────────── ticker ───────────────────────── */}
-        <div className="overflow-hidden rounded-2xl bg-bolt py-4 text-ink" aria-hidden>
-          <div className="flex w-max animate-marquee whitespace-nowrap font-mono text-sm font-medium uppercase tracking-[0.2em]">
-            {[0, 1].map((dup) => (
-              <div key={dup} className="flex items-center">
-                {Array.from({ length: 3 }).flatMap((_, rep) =>
-                  TICKER.map((word, i) => (
-                    <span key={`${rep}-${i}`} className="flex items-center">
-                      <span className="px-6">{word}</span>
-                      {i === TICKER.length - 1 ? (
-                        <BoltMark className="size-4 text-ink" />
-                      ) : (
-                        <ArrowRight className="size-4 opacity-60" />
-                      )}
-                    </span>
-                  )),
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
         {/* ───────────────────────── how it works ───────────────────────── */}
         <section id="how" className="scroll-mt-4 rounded-2xl border border-line bg-panel p-5 sm:p-8 lg:p-12">
           <Reveal>
