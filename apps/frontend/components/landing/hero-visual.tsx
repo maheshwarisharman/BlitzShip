@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { AsciiBolt } from "./ascii-bolt";
+import { useReducedMotion } from "./use-reduced-motion";
 
 /* ───────────────────────── deploy terminal ───────────────────────── */
 
@@ -20,23 +21,25 @@ const DEPLOY_LINES: Line[] = [
 ];
 
 function DeployTerminal() {
-  const [count, setCount] = useState(0);
+  const reduce = useReducedMotion();
+  const [animatedCount, setCount] = useState(0);
+  const count = reduce ? DEPLOY_LINES.length : animatedCount;
 
   useEffect(() => {
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) {
-      setCount(DEPLOY_LINES.length);
-      return;
-    }
+    if (reduce) return;
     let timer: ReturnType<typeof setTimeout>;
     const step = (n: number) => {
-      setCount(n);
-      const done = n >= DEPLOY_LINES.length;
-      timer = setTimeout(() => step(done ? 0 : n + 1), done ? 4200 : n === 0 ? 900 : 620);
+      timer = setTimeout(
+        () => {
+          setCount(n);
+          step(n >= DEPLOY_LINES.length ? 0 : n + 1);
+        },
+        n === 0 ? 4200 : n === 1 ? 900 : 620,
+      );
     };
-    step(0);
+    step(1);
     return () => clearTimeout(timer);
-  }, []);
+  }, [reduce]);
 
   return (
     <div className="w-full overflow-hidden rounded-xl border border-white/10 bg-ink font-mono text-[11px] leading-5 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)]">
