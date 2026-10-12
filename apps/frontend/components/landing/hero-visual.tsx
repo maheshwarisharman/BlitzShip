@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
-import { AsciiBolt } from "./ascii-bolt";
+import Image from "next/image";
+import heroCloud from "../../assets/hero-cloud-computer.jpg";
 import { useReducedMotion } from "./use-reduced-motion";
 
 /* ───────────────────────── deploy terminal ───────────────────────── */
@@ -158,7 +159,14 @@ export function HeroVisual() {
 
   return (
     <div className="relative min-h-[620px] overflow-hidden rounded-2xl border border-white/[0.07] bg-navy lg:min-h-0">
-      <AsciiBolt className="absolute inset-0" />
+      <Image
+        src={heroCloud}
+        alt="A retro computer floating inside a cloud made of ASCII characters"
+        fill
+        priority
+        sizes="(min-width: 1024px) 55vw, 100vw"
+        className="select-none object-cover object-center"
+      />
 
       {/* corner registration marks */}
       {["left-1.5 top-1.5", "right-1.5 top-1.5", "left-1.5 bottom-1.5", "right-1.5 bottom-1.5"].map((pos) => (
