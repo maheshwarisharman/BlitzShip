@@ -1,7 +1,8 @@
 import express, { Express, Request, Response } from "express";
 import cors from "cors";
 import { prisma } from "@repo/db";
-import { clerkMiddleware, requireAuth, getAuth } from "@clerk/express";
+import { clerkMiddleware, getAuth } from "@clerk/express";
+import { requireAuth } from "./middleware/auth.middleware.js";
 
 // v1 Routes
 import githubRoutes from "./routes/githubRoutes.js";

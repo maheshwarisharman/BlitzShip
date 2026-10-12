@@ -20,6 +20,8 @@ export default function LoginPage() {
             routing="path"
             path="/login"
             signUpUrl="/signup"
+            fallbackRedirectUrl="/dashboard"
+            forceRedirectUrl="/dashboard"
           />
         </div>
       </main>

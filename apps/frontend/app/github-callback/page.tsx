@@ -16,7 +16,7 @@ type Status = "loading" | "success" | "error"
 function GithubCallbackInner() {
     const searchParams = useSearchParams()
     const router = useRouter()
-    const { getToken } = useAuth()
+    const { getToken, isLoaded, isSignedIn } = useAuth()
 
     const [status, setStatus] = useState<Status>("loading")
     const [errorMessage, setErrorMessage] = useState<string>("")
@@ -24,6 +24,8 @@ function GithubCallbackInner() {
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL
 
     useEffect(() => {
+        if (!isLoaded || !isSignedIn) return;
+
         const code = searchParams.get("code")
 
         if (!code) {
@@ -34,7 +36,16 @@ function GithubCallbackInner() {
 
         const exchangeCode = async () => {
             try {
-                const token = await getToken()
+                let token = await getToken()
+                if (!token) {
+                    await new Promise((resolve) => setTimeout(resolve, 300))
+                    token = await getToken()
+                }
+                if (!token) {
+                    setErrorMessage("Authentication session not ready. Please refresh.")
+                    setStatus("error")
+                    return
+                }
 
                 await axios.post(
                     `${API_BASE_URL}/github/auth/callback`,
@@ -64,7 +75,7 @@ function GithubCallbackInner() {
 
         exchangeCode()
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [isLoaded, isSignedIn])
 
     return (
         <div className="flex flex-col items-center justify-center gap-6 text-center">

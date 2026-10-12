@@ -15,7 +15,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 export default function DashboardPage() {
-    const { getToken, userId } = useAuth();
+    const { getToken, userId, isLoaded, isSignedIn } = useAuth();
     const router = useRouter();
 
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL
@@ -90,6 +90,7 @@ export default function DashboardPage() {
 
         try {
             const token = await getToken();
+            if (!token) return;
             await axios.get(`${API_BASE_URL}/domain/search/${projectConfig.primary_domain}`, {
                 headers: {
                     Authorization: `Bearer ${token}`
@@ -112,17 +113,26 @@ export default function DashboardPage() {
         const fetchId = ++latestFetchIdRef.current;
         setIsFetchingProjects(true)
         try {
-            const token = await getToken();
+            let token = await getToken();
+            if (!token) {
+                // If token is null immediately post-login navigation, give Clerk session a moment to synchronize
+                await new Promise((resolve) => setTimeout(resolve, 300));
+                token = await getToken();
+            }
+            if (!token) {
+                console.warn("Unable to obtain Clerk auth token");
+                return;
+            }
             const response = await axios.get(`${API_BASE_URL}/projects/all`, {
                 headers: {
                     Authorization: `Bearer ${token}`
                 }
             })
             if (fetchId === latestFetchIdRef.current) {
-                setProjects(response.data.data)
+                setProjects(response.data.data || [])
             }
         } catch (error) {
-            console.error("Failed to fetch projects")
+            console.error("Failed to fetch projects", error)
         } finally {
             if (fetchId === latestFetchIdRef.current) {
                 setIsFetchingProjects(false)
@@ -131,14 +141,24 @@ export default function DashboardPage() {
     }
 
     useEffect(() => {
-      fetchProject()
-    }, [])
+        if (!isLoaded) return;
+        if (!isSignedIn) {
+            setIsFetchingProjects(false);
+            router.push("/login");
+            return;
+        }
+        fetchProject();
+    }, [isLoaded, isSignedIn]);
 
     const handleAddNewProject = async () => {
         setIsLoadingNewProject(true);
         setErrorMsg(null);
         try {
             const token = await getToken();
+            if (!token) {
+                setErrorMsg("Authentication token not available. Please try again.");
+                return;
+            }
             const response = await axios.get(`${API_BASE_URL}/github/is-github-linked`, {
                 headers: {
                     Authorization: `Bearer ${token}`
@@ -175,6 +195,7 @@ export default function DashboardPage() {
         setBranches([])
         try {
             const token = await getToken()
+            if (!token) return;
             const res = await axios.get(
                 `${API_BASE_URL}/github/get-branches?user_id=${userId}&repo=${encodeURIComponent(repoFullName)}`,
                 { headers: { Authorization: `Bearer ${token}` } }
@@ -247,6 +268,10 @@ export default function DashboardPage() {
         setDeployError(null);
         try {
             const token = await getToken();
+            if (!token) {
+                setDeployError("Authentication token not available. Please try again.");
+                return;
+            }
             const headers = { Authorization: `Bearer ${token}` };
 
             // Convert env array [{key,value}] → Record<string,string> expected by backend

@@ -2,7 +2,8 @@ import { Request, Response, Router } from "express";
 import axios from 'axios'
 import { prisma } from '@repo/db'
 import jwt from 'jsonwebtoken'
-import { getAuth, requireAuth } from "@clerk/express"
+import { getAuth } from "@clerk/express"
+import { requireAuth } from "../middleware/auth.middleware.js"
 import crypto from 'crypto'
 import { triggerDeployment } from '../services/triggerDeployment.js'
 

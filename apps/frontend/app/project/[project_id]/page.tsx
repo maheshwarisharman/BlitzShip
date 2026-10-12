@@ -114,7 +114,7 @@ type Project = {
 export default function ProjectDetailsPage() {
   const params = useParams();
   const router = useRouter();
-  const { getToken } = useAuth();
+  const { getToken, isLoaded, isSignedIn } = useAuth();
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
   const [project, setProject] = useState<Project | null>(null);
@@ -257,14 +257,23 @@ export default function ProjectDetailsPage() {
   };
 
   useEffect(() => {
-    const fetchProject = async () => {
-      if (!params.project_id) return;
+    if (!isLoaded || !isSignedIn || !params.project_id) return;
 
+    const fetchProject = async () => {
       setIsLoading(true);
       setError(null);
 
       try {
-        const token = await getToken();
+        let token = await getToken();
+        if (!token) {
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          token = await getToken();
+        }
+        if (!token) {
+          setError("Authentication session not ready. Please refresh.");
+          return;
+        }
+
         const response = await axios.post(
           `${API_BASE_URL}/projects/single`,
           {
@@ -297,7 +306,7 @@ export default function ProjectDetailsPage() {
     };
 
     fetchProject();
-  }, [params.project_id, getToken, API_BASE_URL]);
+  }, [params.project_id, isLoaded, isSignedIn, getToken, API_BASE_URL]);
 
   const sanitizeDomain = (input: string) =>
     input
