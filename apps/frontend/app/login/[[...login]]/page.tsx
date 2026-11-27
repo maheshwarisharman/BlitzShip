@@ -1,30 +1,67 @@
-import { SignIn } from "@clerk/nextjs";
-import { dark } from "@clerk/themes";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useAuth, useSignIn } from "@clerk/nextjs";
+import { usePathname, useRouter } from "next/navigation";
+import { AuthPortal } from "@/components/auth/auth-portal";
+import { SsoCallbackHandler } from "@/components/auth/sso-callback-handler";
+import { SessionHandoff } from "@/components/session-handoff";
 
 export default function LoginPage() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const { isLoaded: authLoaded, isSignedIn } = useAuth();
+  const { signIn } = useSignIn();
+  const [latched, setLatched] = useState(false);
+  const [completedSignUp, setCompletedSignUp] = useState(false);
+
+  const isSsoCallback = pathname?.endsWith("/sso-callback") ?? false;
+  const signInComplete = signIn.status === "complete";
+  const sessionActive = authLoaded && Boolean(isSignedIn);
+  const pending =
+    !isSsoCallback && !completedSignUp && (sessionActive || signInComplete);
+
+  if (pending && !latched) {
+    setLatched(true);
+  }
+
+  const showHandoff =
+    !isSsoCallback && !completedSignUp && (latched || pending);
+
+  useEffect(() => {
+    if (!showHandoff) return;
+    router.prefetch("/dashboard");
+  }, [showHandoff, router]);
+
+  useEffect(() => {
+    if (!sessionActive || isSsoCallback || completedSignUp) return;
+    router.replace("/dashboard");
+  }, [sessionActive, isSsoCallback, completedSignUp, router]);
+
+  useEffect(() => {
+    if (!latched || sessionActive || signInComplete) return;
+    const timer = window.setTimeout(() => setLatched(false), 8000);
+    return () => window.clearTimeout(timer);
+  }, [latched, sessionActive, signInComplete]);
+
+  if (isSsoCallback) {
+    return <SsoCallbackHandler defaultMode="sign-in" />;
+  }
+
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground relative">
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
-      <div className="absolute inset-x-0 top-0 h-[40vh] bg-gradient-to-b from-background via-background/90 to-transparent pointer-events-none" />
-      <div className="absolute inset-x-0 bottom-0 h-[40vh] bg-gradient-to-t from-background via-background/90 to-transparent pointer-events-none" />
-
-      <main className="relative z-10 flex flex-col items-center justify-center flex-1 w-full px-4 sm:px-6">
-        <div className="w-full max-w-[400px] mb-8 mt-12 flex flex-col items-center text-center">          
-          <p className="text-sm text-muted-foreground max-w-[300px]">
-            Sign in to manage your deployments
-          </p>
-        </div>
-
-        <div className="w-full max-w-[400px]">
-          <SignIn 
-            routing="path"
-            path="/login"
-            signUpUrl="/signup"
-            fallbackRedirectUrl="/dashboard"
-            forceRedirectUrl="/dashboard"
-          />
-        </div>
-      </main>
-    </div>
+    <>
+      <AuthPortal
+        initialMode="sign-in"
+        ssoCallbackPath="/login/sso-callback"
+        onAuthComplete={(completedMode) => {
+          if (completedMode === "sign-up") {
+            setCompletedSignUp(true);
+            return;
+          }
+          setLatched(true);
+        }}
+      />
+      {showHandoff && <SessionHandoff />}
+    </>
   );
 }

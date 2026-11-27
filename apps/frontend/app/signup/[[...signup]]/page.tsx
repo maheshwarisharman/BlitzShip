@@ -1,30 +1,33 @@
-import { SignUp } from "@clerk/nextjs";
-import { dark } from "@clerk/themes";
+"use client";
+
+import { useEffect } from "react";
+import { useAuth } from "@clerk/nextjs";
+import { usePathname, useRouter } from "next/navigation";
+import { AuthPortal } from "@/components/auth/auth-portal";
+import { SsoCallbackHandler } from "@/components/auth/sso-callback-handler";
 
 export default function SignUpPage() {
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL
+  const pathname = usePathname();
+  const router = useRouter();
+  const { isLoaded: authLoaded, isSignedIn } = useAuth();
+
+  const isSsoCallback = pathname?.endsWith("/sso-callback") ?? false;
+
+  useEffect(() => {
+    if (isSsoCallback) return;
+    if (authLoaded && isSignedIn) {
+      router.replace("/dashboard");
+    }
+  }, [authLoaded, isSignedIn, isSsoCallback, router]);
+
+  if (isSsoCallback) {
+    return <SsoCallbackHandler defaultMode="sign-up" />;
+  }
+
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground relative">
-      {/* Background decorations - Vercel style subtle grid */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
-      <div className="absolute inset-x-0 top-0 h-[40vh] bg-gradient-to-b from-background via-background/90 to-transparent pointer-events-none" />
-      <div className="absolute inset-x-0 bottom-0 h-[40vh] bg-gradient-to-t from-background via-background/90 to-transparent pointer-events-none" />
-
-      <main className="relative z-10 flex flex-col items-center justify-center flex-1 w-full px-4 sm:px-6">
-        <div className="w-full max-w-[400px] mb-8 mt-12 flex flex-col items-center text-center">          
-          <p className="text-sm text-muted-foreground max-w-[300px]">
-            Sign up to manage your deployments
-          </p>
-        </div>
-
-        <div className="w-full max-w-[400px]">
-          <SignUp 
-            routing="path"
-            path="/signup"
-            forceRedirectUrl="/post-signup"
-          />
-        </div>
-      </main>
-    </div>
+    <AuthPortal
+      initialMode="sign-up"
+      ssoCallbackPath="/signup/sso-callback"
+    />
   );
 }
