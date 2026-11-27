@@ -4,7 +4,7 @@
 
 <img src="https://img.shields.io/badge/BlitzShip-static%20deployment-6366f1?style=for-the-badge&logoColor=white" alt="BlitzShip" height="40"/>
 
-# ⚡ Blitzship
+# Blitzship
 
 **From `git push` to live site — in a blitz.**
 
@@ -27,32 +27,32 @@ Connect your GitHub repo, configure your build, and Blitzship handles the rest: 
 
 ---
 
-## 📖 Table of Contents
+## Table of Contents
 
-- [What is Blitzship?](#-what-is-blitzship)
-- [Architecture](#-architecture)
-- [How a Deployment Works](#-how-a-deployment-works)
-- [Monorepo Structure](#-monorepo-structure)
-- [Tech Stack](#-tech-stack)
-- [Features](#-features)
-- [Getting Started](#-getting-started)
+- [What is Blitzship?](#what-is-blitzship)
+- [Architecture](#architecture)
+- [How a Deployment Works](#how-a-deployment-works)
+- [Monorepo Structure](#monorepo-structure)
+- [Tech Stack](#tech-stack)
+- [Features](#features)
+- [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
   - [Environment Variables](#environment-variables)
   - [Database Setup](#database-setup)
   - [Build the Docker Builder Image](#build-the-docker-builder-image)
   - [Run the Platform](#run-the-platform)
-- [Custom Domains & SSL](#-custom-domains--ssl)
-- [Domain Routing (Lambda@Edge)](#-domain-routing-lambdaedge)
-- [Environment Variable Encryption](#-environment-variable-encryption)
-- [Database Schema](#-database-schema)
-- [API Reference](#-api-reference)
-- [Contributing](#-contributing)
-- [License](#-license)
+- [Custom Domains & SSL](#custom-domains--ssl)
+- [Domain Routing (Lambda@Edge)](#domain-routing-lambdaedge)
+- [Environment Variable Encryption](#environment-variable-encryption)
+- [Database Schema](#database-schema)
+- [API Reference](#api-reference)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
-## 🚀 What is Blitzship?
+## What is Blitzship?
 
 Blitzship is a **self-hosted static React deployment platform** — think Vercel, but one you own and understand top-to-bottom. You connect your GitHub account via a GitHub App, pick any repository, provide your build command and output directory, and Blitzship takes over:
 
@@ -66,104 +66,81 @@ Every deployment gets an **automatic visual screenshot** (via Puppeteer) so you 
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                        User's Browser                           │
-│          Next.js 16  ·  Clerk Auth  ·  Tailwind + shadcn/ui     │
-└─────────────────────────────┬────────────────────────────────────┘
-                              │ HTTPS API calls
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                  Primary Backend  (Express 5 / Bun)             │
-│  ┌──────────┐  ┌──────────┐  ┌────────────┐  ┌─────────────┐  │
-│  │ /github  │  │ /deploy  │  │ /domain    │  │ /projects   │  │
-│  │ webhook  │  │ routes   │  │ routes     │  │ routes      │  │
-│  └────┬─────┘  └─────┬────┘  └─────┬──────┘  └──────┬──────┘  │
-│       │               │             │                 │         │
-│       └───────────────┴─────────────┴─────────────────┘        │
-│                             │                                   │
-│          ┌──────────────────▼─────────────────┐                 │
-│          │       Prisma ORM → PostgreSQL       │                 │
-│          └────────────────────────────────────┘                 │
-│                             │                                   │
-│          ┌──────────────────▼─────────────────┐                 │
-│          │      AWS SQS  (Build Job Queue)    │                 │
-│          └────────────────────────────────────┘                 │
-└─────────────────────────────────────────────────────────────────┘
-                              │ Long-poll (20 s)
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                       Build Worker  (Bun)                       │
-│                                                                 │
-│  ┌────────────────────────────────────────────────────────┐    │
-│  │            Docker Container  (node:22-alpine)           │    │
-│  │  1. git clone --depth 1 <repo>                         │    │
-│  │  2. npm ci                                             │    │
-│  │  3. inject .env  (AES-256-GCM decrypted)               │    │
-│  │  4. <build_command>  (e.g. npm run build)              │    │
-│  │  5. copy artifact → host tmpdir                        │    │
-│  └────────────────────────────────────────────────────────┘    │
-│                                                                 │
-│  ┌────────────────────────────────────────────────────────┐    │
-│  │   Upload artifacts → S3 (deployments/<id>/…)           │    │
-│  │   Screenshot via Puppeteer → S3 snapshot               │    │
-│  │   Update DB: is_build_success, preview_url             │    │
-│  └────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     AWS CloudFront + S3                         │
-│                                                                 │
-│   ┌─────────────────────────────────────────────────────┐      │
-│   │  Lambda@Edge  (Viewer Request)                       │      │
-│   │                                                      │      │
-│   │  14.blitzship.app  →  /deployments/14/index.html    │      │
-│   │  myapp.blitzship.app →  DB lookup slug → rewrite    │      │
-│   │  mycorp.com          →  DB lookup domain → rewrite  │      │
-│   └─────────────────────────────────────────────────────┘      │
-│                                                                 │
-│               ⤷ S3 Origin: blitzship bucket                    │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Browser["User's Browser\nNext.js 16 · Clerk Auth · Tailwind + shadcn/ui"]
+
+    subgraph Backend["Primary Backend (Express 5 / Bun)"]
+        GH["/github\nwebhook"]
+        DEP["/deploy\nroutes"]
+        DOM["/domain\nroutes"]
+        PROJ["/projects\nroutes"]
+        DB["Prisma ORM → PostgreSQL"]
+        SQS["AWS SQS — Build Job Queue"]
+        GH & DEP & DOM & PROJ --> DB --> SQS
+    end
+
+    subgraph Worker["Build Worker (Bun)"]
+        subgraph Docker["Docker Container (node:22-alpine)"]
+            D1["1. git clone --depth 1"]
+            D2["2. npm ci"]
+            D3["3. inject .env (AES-256-GCM)"]
+            D4["4. run build command"]
+            D5["5. copy artifact to host"]
+            D1 --> D2 --> D3 --> D4 --> D5
+        end
+        UP["Upload artifacts → S3"]
+        SNAP["Screenshot via Puppeteer → S3"]
+        UPD["Update DB: is_build_success, preview_url"]
+        D5 --> UP & SNAP --> UPD
+    end
+
+    subgraph CDN["AWS CloudFront + S3"]
+        LAMBDA["Lambda@Edge — Viewer Request\n14.blitzship.app → /deployments/14/index.html\nmyapp.blitzship.app → DB slug lookup\nmycorp.com → DB domain lookup"]
+        S3["S3 Origin: blitzship bucket"]
+        LAMBDA --> S3
+    end
+
+    Browser -->|HTTPS API calls| Backend
+    SQS -->|Long-poll 20 s| Worker
+    Worker --> CDN
 ```
 
 ---
 
-## 🔄 How a Deployment Works
+## How a Deployment Works
 
-```
-Developer                  Blitzship Platform                       AWS
-─────────                  ──────────────────                       ───
+```mermaid
+sequenceDiagram
+    participant Dev as Developer
+    participant API as Primary Backend
+    participant SQS as AWS SQS
+    participant W as Build Worker
+    participant S3 as AWS S3
+    participant CF as CloudFront
 
-  │   git push / click Deploy │                                      │
-  │──────────────────────────▶│                                      │
-  │                           │  POST /deploy/create-deployment      │
-  │                           │  ─ create Deployment row in DB       │
-  │                           │  ─ enqueue BuildJob to SQS ─────────▶│
-  │                           │                                      │
-  │                           │◀─────── Build Worker polls SQS ──────│
-  │                           │         (every 5 s, long-poll 20 s)  │
-  │                           │                                      │
-  │                           │  ─ docker run build-worker:latest    │
-  │                           │  ─ git clone → npm ci → build        │
-  │                           │  ─ upload dist/* to S3 ─────────────▶│
-  │                           │  ─ Puppeteer screenshot ─────────────▶│
-  │                           │  ─ update DB (success, preview_url)  │
-  │                           │                                      │
-  │  ✅ Site live at preview URL │                                   │
-  │◀──────────────────────────│                                      │
-  │                           │                                      │
-  │  Optional: Promote to prod│                                      │
-  │──────────────────────────▶│  POST /deploy/mark-production        │
-  │                           │  ─ update Domain table               │
-  │                           │  ─ Lambda@Edge picks up new mapping  │
+    Dev->>API: git push / click Deploy
+    API->>API: Create Deployment row in DB
+    API->>SQS: Enqueue BuildJob
+    W->>SQS: Poll for messages (every 5 s, long-poll 20 s)
+    SQS-->>W: Deliver BuildJob
+    W->>W: docker run build-worker:latest
+    W->>W: git clone → npm ci → build
+    W->>S3: Upload dist/* to deployments/<id>/
+    W->>S3: Puppeteer screenshot → snapshot
+    W->>API: Update DB (is_build_success, preview_url)
+    API-->>Dev: Site live at https://<id>.blitzship.app
+
+    Dev->>API: POST /deploy/mark-production
+    API->>API: Update Domain table
+    CF->>CF: Lambda@Edge picks up new mapping
 ```
 
 ---
 
-## 📂 Monorepo Structure
+## Monorepo Structure
 
 This project is a **Turborepo** monorepo managed with **Bun** workspaces.
 
@@ -227,7 +204,7 @@ vercel-clone/                        ← repo root
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |---|---|
@@ -247,23 +224,23 @@ vercel-clone/                        ← repo root
 
 ---
 
-## ✨ Features
+## Features
 
-- 🔗 **GitHub App integration** — connect once, deploy any repo. Auto-deploy on `git push` via webhooks.
-- 🐳 **Fully sandboxed builds** — every build runs in an isolated Docker container with memory (`2 GB`) and CPU (`1.5` cores) limits.
-- 🌍 **Global CDN delivery** — CloudFront serves your static assets from edge locations worldwide.
-- 🔀 **SPA support** — routes without a file extension are automatically served `index.html` for client-side routing.
-- 🌐 **Free subdomain** — every deployment gets `https://<id>.blitzship.app`; every project gets `https://<slug>.blitzship.app`.
-- 🔒 **Custom domains + auto-SSL** — add your own domain; Blitzship requests an ACM certificate and provisions a CloudFront tenant automatically.
-- 📸 **Deployment snapshots** — Puppeteer captures a 1280×800 screenshot of each live deployment for instant visual diff.
-- 🔑 **Encrypted environment variables** — project env vars are encrypted at rest with AES-256-GCM and decrypted only inside the build container.
-- 🔄 **Self-healing repo references** — the build worker detects repo renames/transfers via GitHub API and heals the database automatically.
-- ♻️ **Promote any deployment to production** — roll back or promote a previous deployment to production with one API call.
-- ⚡ **Turborepo caching** — incremental builds across the monorepo for fast local development.
+- **GitHub App integration** — connect once, deploy any repo. Auto-deploy on `git push` via webhooks.
+- **Fully sandboxed builds** — every build runs in an isolated Docker container with memory (`2 GB`) and CPU (`1.5` cores) limits.
+- **Global CDN delivery** — CloudFront serves your static assets from edge locations worldwide.
+- **SPA support** — routes without a file extension are automatically served `index.html` for client-side routing.
+- **Free subdomain** — every deployment gets `https://<id>.blitzship.app`; every project gets `https://<slug>.blitzship.app`.
+- **Custom domains + auto-SSL** — add your own domain; Blitzship requests an ACM certificate and provisions a CloudFront tenant automatically.
+- **Deployment snapshots** — Puppeteer captures a 1280×800 screenshot of each live deployment for instant visual diff.
+- **Encrypted environment variables** — project env vars are encrypted at rest with AES-256-GCM and decrypted only inside the build container.
+- **Self-healing repo references** — the build worker detects repo renames/transfers via GitHub API and heals the database automatically.
+- **Promote any deployment to production** — roll back or promote a previous deployment to production with one API call.
+- **Turborepo caching** — incremental builds across the monorepo for fast local development.
 
 ---
 
-## 🏁 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -394,33 +371,28 @@ bun run dev          # turbo run dev (all apps in parallel)
 
 ---
 
-## 🌐 Custom Domains & SSL
+## Custom Domains & SSL
 
 Blitzship provisions custom domain SSL automatically through AWS ACM:
 
-```
-User adds custom domain
-        │
-        ▼
-POST /custom-domain/add
-  └─▶ Request ACM certificate (DNS validation)
-  └─▶ Store cert_arn in DB (status: PENDING)
-        │
-        ▼
-  ACM Cert Cron Job (runs in primary-backend)
-  └─▶ Poll ACM every minute
-  └─▶ When ISSUED → create CloudFront Distribution Tenant
-  └─▶ Store tenant_id, tenant_arn in DB (status: ACTIVE)
-        │
-        ▼
-  Lambda@Edge routes traffic for custom domain
+```mermaid
+flowchart TD
+    A["User adds custom domain"] --> B["POST /custom-domain/add"]
+    B --> C["Request ACM certificate\n(DNS validation)"]
+    C --> D["Store cert_arn in DB\nstatus: PENDING"]
+    D --> E["ACM Cert Cron Job\nruns in primary-backend"]
+    E --> F{"ACM cert\nissued?"}
+    F -->|No| E
+    F -->|Yes| G["Create CloudFront\nDistribution Tenant"]
+    G --> H["Store tenant_id + tenant_arn in DB\nstatus: ACTIVE"]
+    H --> I["Lambda@Edge routes traffic\nfor custom domain"]
 ```
 
 > **Note:** You need to add a CNAME record in your DNS pointing your domain to the CloudFront distribution domain.
 
 ---
 
-## 🔀 Domain Routing (Lambda@Edge)
+## Domain Routing (Lambda@Edge)
 
 The CloudFront `viewer-request` Lambda handles three URL patterns:
 
@@ -436,64 +408,82 @@ The Lambda maintains an **in-memory cache** (90 s TTL) per warm container to min
 
 ---
 
-## 🔑 Environment Variable Encryption
+## Environment Variable Encryption
 
 Project environment variables are stored **encrypted at rest** using AES-256-GCM via the `@repo/env-crypto` package.
 
-```
-User submits env vars via frontend
-        │
-        ▼
-POST /deploy/create-project
-  └─▶ encryptEnvMap(envVars)   ← AES-256-GCM with ENV_ENCRYPTION_SECRET
-  └─▶ stores encrypted blob in DB (project_env JSON column)
-        │
-        ▼
-Deployment triggered
-  └─▶ decryptEnvMap(project.project_env)
-  └─▶ passes plaintext vars inside BuildJob (SQS message)
-        │
-        ▼
-Build worker injects vars into container via docker exec stdin
-  └─▶ cat > /workspace/repo/.env   (safe — no shell interpolation)
+```mermaid
+flowchart TD
+    A["User submits env vars via frontend"] --> B["POST /deploy/create-project"]
+    B --> C["encryptEnvMap(envVars)\nAES-256-GCM with ENV_ENCRYPTION_SECRET"]
+    C --> D["Encrypted blob stored in DB\nproject_env JSON column"]
+    D --> E["Deployment triggered"]
+    E --> F["decryptEnvMap(project.project_env)"]
+    F --> G["Plaintext vars passed inside\nBuildJob SQS message"]
+    G --> H["Build worker: docker exec stdin\ncat > /workspace/repo/.env\nsafe — no shell interpolation"]
 ```
 
 > **Never** log or return `project_env` from API responses — the codebase strips it before sending.
 
 ---
 
-## 🗄️ Database Schema
+## Database Schema
 
-```
-┌──────────┐       ┌──────────────┐       ┌───────────┐
-│   User   │──────▶│   Project    │──────▶│Deployment │
-│          │  1:N  │              │  1:N  │           │
-│ id (PK)  │       │ project_id   │       │deploy_id  │
-│ email    │       │ name         │       │project_id │
-│ name     │       │ github_url   │       │preview_url│
-│ github_* │       │ build_cmd    │       │snapshot   │
-└──────────┘       │ output_dir   │       │build_logs │
-                   │ build_branch │       │is_success │
-                   │ primary_dom  │       └───────────┘
-                   │ project_env  │
-                   │ prod_dep_id──┼──────▶ Deployment (1:1)
-                   └──────────────┘
+```mermaid
+erDiagram
+    User {
+        string id PK
+        string email
+        string name
+        string github_username
+        string github_user_id
+        string github_installation_id
+    }
+    Project {
+        int project_id PK
+        string name
+        string github_url
+        string build_cmd
+        string output_dir
+        string repoName
+        string build_branch
+        string primary_domain
+        int production_deployment_id FK
+        json project_env
+    }
+    Deployment {
+        int deployment_id PK
+        int project_id FK
+        boolean is_build_success
+        string preview_url
+        string snapshot_url
+        string build_logs
+        string commit_message
+    }
+    Domain {
+        string id PK
+        string domain_url
+        int deployment_id FK
+    }
+    CustomDomain {
+        string id PK
+        string domain
+        int deployment_id FK
+        string cert_arn
+        string tenant_id
+        string status
+    }
 
-┌──────────────┐       ┌──────────────────────┐
-│    Domain    │       │    CustomDomain       │
-│ (slug → dep) │       │ (domain → dep)        │
-│              │       │                       │
-│ domain_url   │       │ domain                │
-│ deployment_id│       │ deployment_id         │
-└──────────────┘       │ cert_arn (ACM)        │
-                       │ tenant_id (CF)        │
-                       │ status: PENDING|ACTIVE│
-                       └──────────────────────┘
+    User ||--o{ Project : "owns"
+    Project ||--o{ Deployment : "has"
+    Project ||--o| Deployment : "production"
+    Domain }o--o| Deployment : "points to"
+    CustomDomain }o--o| Deployment : "points to"
 ```
 
 ---
 
-## 📡 API Reference
+## API Reference
 
 All routes require a valid **Clerk session token** in the `Authorization: Bearer <token>` header unless marked public.
 
@@ -537,7 +527,7 @@ All routes require a valid **Clerk session token** in the `Authorization: Bearer
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions, issues, and feature requests are welcome!
 
@@ -557,7 +547,7 @@ bun run format        # prettier --write
 
 ---
 
-## 📄 License
+## License
 
 This project is for educational and personal use. Feel free to fork and adapt it for your own infrastructure.
 
