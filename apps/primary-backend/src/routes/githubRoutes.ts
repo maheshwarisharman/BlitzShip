@@ -3,9 +3,11 @@ import axios from 'axios'
 import { prisma } from '@repo/db'
 import jwt from 'jsonwebtoken'
 import { getAuth } from "@clerk/express"
-import { requireAuth } from "../middleware/auth.middleware.js"
+import { requireAuth, requireInternalSecret } from "../middleware/auth.middleware.js"
 import crypto from 'crypto'
 import { triggerDeployment } from '../services/triggerDeployment.js'
+import { detectBuildConfig, fetchRepoSnapshot, RepoRefNotFoundError } from '../services/detectBuildConfig.js'
+import { detectConfigQuerySchema, getBranchesQuerySchema } from '../schemas/github.schema.js'
 
 const router: Router = Router()
 
@@ -59,6 +61,20 @@ async function getInstallationAccessToken(installationId: string): Promise<strin
 
     return response.data.token
 }
+
+/**
+ * Returns a fresh installation token for the given user, or null if they have not installed the GitHub App.
+ */
+async function getUserInstallationToken(userId: string): Promise<string | null> {
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { github_installation_id: true }
+    })
+    if (!user?.github_installation_id) return null
+    return getInstallationAccessToken(user.github_installation_id)
+}
+
+const APP_NOT_INSTALLED_MESSAGE = 'GitHub App is not installed for this user. Please install the app first.'
 
 // ─── Webhook Signature Verification ─────────────────────────────────
 /**
@@ -401,37 +417,21 @@ router.post('/webhook', async (req: Request, res: Response) => {
 
 
 /*
- * GET /get-repos - Fetch user's GitHub repos using a GitHub App Installation Access Token.
+ * GET /get-repos - Fetch the signed-in user's GitHub repos using a GitHub App Installation Access Token.
  */
-router.get('/get-repos', async (req: Request, res: Response) => {
+router.get('/get-repos', requireAuth(), async (req: Request, res: Response) => {
 
-    //TODO: Extract user_id from authorization token in request headers
-    const userId = req.query.user_id as string
-
-    if (!userId) {
-        return res.status(400).json({
-            success: false,
-            error: 'user_id query parameter is required'
-        })
-    }
+    const userId = getAuth(req).userId!
 
     try {
-        // 1. Get the user's installation_id from DB
-        const user = await prisma.user.findUnique({
-            where: { id: userId }
-        })
-
-        if (!user?.github_installation_id) {
+        const accessToken = await getUserInstallationToken(userId)
+        if (!accessToken) {
             return res.status(404).json({
                 success: false,
-                error: 'GitHub App is not installed for this user. Please install the app first.'
+                error: APP_NOT_INSTALLED_MESSAGE
             })
         }
 
-        // 2. Generate a fresh installation access token (short-lived, 1hr)
-        const accessToken = await getInstallationAccessToken(user.github_installation_id)
-
-        // 3. Fetch repos using the installation token
         const repos = await axios.get('https://api.github.com/installation/repositories', {
             headers: {
                 Authorization: `Bearer ${accessToken}`,
@@ -458,39 +458,31 @@ router.get('/get-repos', async (req: Request, res: Response) => {
  * Uses the GitHub App Installation Access Token (same pattern as /get-repos).
  *
  * Query params:
- *   - user_id: string  (Clerk user ID)
- *   - repo:    string  (full repo name, e.g. "octocat/Hello-World")
+ *   - repo: string  (full repo name, e.g. "octocat/Hello-World")
  */
-router.get('/get-branches', async (req: Request, res: Response) => {
+router.get('/get-branches', requireAuth(), async (req: Request, res: Response) => {
 
-    const userId = req.query.user_id as string
-    const repo   = req.query.repo   as string
+    const userId = getAuth(req).userId!
+    const query = getBranchesQuerySchema.safeParse(req.query)
 
-    if (!userId || !repo) {
+    if (!query.success) {
         return res.status(400).json({
             success: false,
-            error: 'user_id and repo query parameters are required'
+            error: query.error.issues[0]?.message ?? 'Invalid query parameters'
         })
     }
+    const { repo } = query.data
 
     try {
-        // 1. Get the user's installation_id from DB
-        const user = await prisma.user.findUnique({
-            where: { id: userId }
-        })
-
-        if (!user?.github_installation_id) {
+        const accessToken = await getUserInstallationToken(userId)
+        if (!accessToken) {
             return res.status(404).json({
                 success: false,
-                error: 'GitHub App is not installed for this user. Please install the app first.'
+                error: APP_NOT_INSTALLED_MESSAGE
             })
         }
 
-        // 2. Generate a fresh installation access token (short-lived, 1hr)
-        const accessToken = await getInstallationAccessToken(user.github_installation_id)
-
-        // 3. Fetch branches for the repo using the installation token
-        //    GitHub paginates at 30 by default; fetch up to 100 per page
+        // GitHub paginates at 30 by default; fetch up to 100 per page
         const branchesRes = await axios.get(
             `https://api.github.com/repos/${repo}/branches`,
             {
@@ -519,15 +511,69 @@ router.get('/get-branches', async (req: Request, res: Response) => {
 })
 
 /*
+ * GET /detect-config - Detect the framework, build command and output directory
+ * of a repository branch by reading its root files through the GitHub API.
+ *
+ * Query params:
+ *   - repo:   string  (full repo name, e.g. "octocat/Hello-World")
+ *   - branch: string  (branch to inspect)
+ */
+router.get('/detect-config', requireAuth(), async (req: Request, res: Response) => {
+
+    const userId = getAuth(req).userId!
+    const query = detectConfigQuerySchema.safeParse(req.query)
+
+    if (!query.success) {
+        return res.status(400).json({
+            success: false,
+            error: query.error.issues[0]?.message ?? 'Invalid query parameters'
+        })
+    }
+    const { repo, branch } = query.data
+
+    try {
+        const accessToken = await getUserInstallationToken(userId)
+        if (!accessToken) {
+            return res.status(404).json({
+                success: false,
+                error: APP_NOT_INSTALLED_MESSAGE
+            })
+        }
+
+        const snapshot = await fetchRepoSnapshot(accessToken, repo, branch)
+        const config = await detectBuildConfig(snapshot)
+
+        return res.status(200).json({
+            success: true,
+            data: config
+        })
+
+    } catch (e) {
+        if (e instanceof RepoRefNotFoundError) {
+            return res.status(404).json({
+                success: false,
+                error: e.message
+            })
+        }
+        console.error('[github-app] Error detecting build config:', e)
+        return res.status(500).json({
+            success: false,
+            error: 'Failed to detect build configuration'
+        })
+    }
+})
+
+/*
  * GET /installation-token - Generate a fresh Installation Access Token
  * Used by other services (e.g., build-worker) that need to clone private repos.
  * Returns a short-lived token (1hr) that can be used for git clone authentication.
+ * Internal only: callers must send the shared INTERNAL_API_SECRET in `x-internal-secret`.
  */
-router.get('/installation-token', async (req: Request, res: Response) => {
+router.get('/installation-token', requireInternalSecret(), async (req: Request, res: Response) => {
 
-    const userId = req.query.user_id as string
+    const userId = req.query.user_id
 
-    if (!userId) {
+    if (typeof userId !== 'string' || !userId) {
         return res.status(400).json({
             success: false,
             error: 'user_id query parameter is required'
@@ -535,18 +581,13 @@ router.get('/installation-token', async (req: Request, res: Response) => {
     }
 
     try {
-        const user = await prisma.user.findUnique({
-            where: { id: userId }
-        })
-
-        if (!user?.github_installation_id) {
+        const accessToken = await getUserInstallationToken(userId)
+        if (!accessToken) {
             return res.status(404).json({
                 success: false,
                 error: 'GitHub App is not installed for this user'
             })
         }
-
-        const accessToken = await getInstallationAccessToken(user.github_installation_id)
 
         return res.status(200).json({
             success: true,
