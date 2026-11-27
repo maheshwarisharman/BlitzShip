@@ -326,18 +326,61 @@ router.put("/build-settings", async (req, res) => {
 });
 
 router.delete("/delete", async (req, res) => {
+  const auth = getAuth(req);
+  const clerkUserId = auth.userId;
+
+  if (!clerkUserId) {
+    return res.status(401).json({
+      message: "Unauthorized",
+    });
+  }
+
+  const rawProjectId = req.body?.project_id;
+  if (
+    rawProjectId === undefined ||
+    rawProjectId === null ||
+    (typeof rawProjectId !== "number" && typeof rawProjectId !== "string") ||
+    (typeof rawProjectId === "string" && rawProjectId.trim() === "")
+  ) {
+    return res.status(400).json({
+      message: "project_id is required",
+    });
+  }
+
+  const projectId = Number(rawProjectId);
+  if (!Number.isInteger(projectId) || projectId <= 0 || projectId > 2147483647) {
+    return res.status(400).json({
+      message: "project_id must be a valid positive integer",
+    });
+  }
+
   try {
-    const projectId = req.body.project_id;
+    const existingProject = await prisma.project.findUnique({
+      where: { project_id: projectId },
+      select: { user_id: true },
+    });
+
+    if (!existingProject) {
+      return res.status(404).json({
+        message: "Project not found",
+      });
+    }
+
+    if (existingProject.user_id !== clerkUserId) {
+      return res.status(403).json({
+        message: "Forbidden: you do not own this project",
+      });
+    }
 
     // Unlink production_deployment_id first to prevent FK constraint on deployment deletion,
-    // then delete related records and the project atomically
+    // then delete related records and the project atomically (scoped by user_id to prevent TOCTOU)
     const [, , , project] = await prisma.$transaction([
       prisma.project.update({
-        where: { project_id: projectId },
+        where: { project_id: projectId, user_id: clerkUserId },
         data: { production_deployment_id: null },
       }),
       prisma.deployment.deleteMany({
-        where: { project_id: projectId },
+        where: { project_id: projectId, project: { user_id: clerkUserId } },
       }),
       prisma.customDomain.deleteMany({
         where: { project_id: projectId },
@@ -345,19 +388,22 @@ router.delete("/delete", async (req, res) => {
       prisma.project.delete({
         where: {
           project_id: projectId,
+          user_id: clerkUserId,
         },
       }),
     ]);
 
     res.status(200).json({
       message: "Project deleted successfully",
-      data: project,
+      data: {
+        ...project,
+        project_env: undefined,
+      },
     });
   } catch (e) {
-    console.log(e);
+    console.error(e);
     res.status(500).json({
       message: "Some error occured",
-      error: e,
     });
   }
 });
