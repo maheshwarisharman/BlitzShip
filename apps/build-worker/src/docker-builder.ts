@@ -7,6 +7,7 @@ import type { BuildJob } from '@repo/types';
 import { uploadDirectoryToS3 } from './upload-on-s3.js'
 import { captureDeploymentSnapshot } from './snapshot.js'
 import { prisma } from '@repo/db'
+import { FALLBACK_OUTPUT_DIRS, normalizeOutputDir, pickInstallCommand } from './build-config.js'
 
 const BUILDER_IMAGE = 'build-worker:latest';
 const CONTAINER_WORKSPACE = '/workspace';
@@ -30,6 +31,11 @@ export async function runBuildInContainer(job: BuildJob) {
   const localArtifactPath = path.join(os.tmpdir(), containerId);
 
   try {
+
+    const configuredOutDir = normalizeOutputDir(job.buildOutDir);
+    if (!configuredOutDir) {
+      throw new Error(`Invalid output directory "${job.buildOutDir}". It must be a relative path inside the repository.`);
+    }
 
     await execa('docker', [
       'run',
@@ -75,22 +81,25 @@ export async function runBuildInContainer(job: BuildJob) {
       cloneUrl = `https://github.com/${repoFullName}.git`;
     }
 
-    onLog(`[git] Cloning ${repoFullName}...`);
+    onLog(`[git] Cloning ${repoFullName}${job.buildBranch ? ` (branch: ${job.buildBranch})` : ''}...`);
 
     //Clone the Git Repo inside running container
     await dockerExec(containerId, [
       'git', 'clone',
       '--depth', '1',
       '--single-branch',
+      ...(job.buildBranch ? ['--branch', job.buildBranch] : []),
       cloneUrl,
       repoDir,
     ])
 
     //install all the node dependencies
-    await dockerExec(containerId, [
-      'npm', 'ci',
-      '--prefix', repoDir,
-    ])
+    const installPlan = await resolveInstallPlan(containerId, repoDir);
+    if (!installPlan.hasLockfile) {
+      onLog(`[install] No ${installPlan.packageManager} lockfile found; installing without a lockfile`);
+    }
+    onLog(`[install] Running "${installPlan.command.join(' ')}"`);
+    await dockerExec(containerId, installPlan.command, onLog, { workdir: repoDir })
 
     // Write environment variables to .env file inside the container.
     // Uses stdin piping instead of shell interpolation to safely handle any
@@ -116,21 +125,23 @@ export async function runBuildInContainer(job: BuildJob) {
       `cd ${repoDir} && ${job.buildCommand}`,
     ], onLog)
 
+    const outputDir = await resolveOutputDir(containerId, repoDir, configuredOutDir, onLog);
+    if (outputDir !== configuredOutDir) {
+      await persistDetectedOutputDir(job.id, outputDir, onLog);
+    }
 
-
-    const artifactDirInContainer = `${repoDir}/${job.buildOutDir}`;
     await fs.mkdir(localArtifactPath, { recursive: true });
 
+    // Trailing "/." copies the directory's contents, so nested paths like "build/client" land at the root
     await execa('docker', [
       'cp',
-      `${containerId}:${artifactDirInContainer}`,
+      `${containerId}:${repoDir}/${outputDir}/.`,
       localArtifactPath,
     ]);
 
-    console.log("Artifacts are copied to:- ", path.join(localArtifactPath, job.buildOutDir))
-    const tmpPath = path.join(localArtifactPath, job.buildOutDir);
+    console.log("Artifacts are copied to:- ", localArtifactPath)
 
-    const uploadStatus = await uploadDirectoryToS3(tmpPath, job.id, BUCKET)
+    const uploadStatus = await uploadDirectoryToS3(localArtifactPath, job.id, BUCKET)
     if (uploadStatus) {
       const previewUrl = `https://${job.id}.blitzship.app`;
 
@@ -202,6 +213,8 @@ export async function runBuildInContainer(job: BuildJob) {
   } catch (e) {
 
     console.error("There was some error in building the project:- ", e)
+    // Build logs are written from buildLogs in `finally`, so the failure reason must be added there
+    onLog(`[error] ${e instanceof Error ? e.message : String(e)}`);
     await prisma.deployment.update({
       where: {
         deployment_id: job.id,
@@ -216,14 +229,73 @@ export async function runBuildInContainer(job: BuildJob) {
 
     await writeLogsToDB(job.id, buildLogs)
     await cleanupContainer(containerId);
+    await fs.rm(localArtifactPath, { recursive: true, force: true });
 
   }
 
 }
 
+async function resolveInstallPlan(containerId: string, repoDir: string) {
+  const { stdout } = await execa('docker', ['exec', containerId, 'ls', '-A', repoDir]);
+  const rootFiles = stdout.split('\n').filter(Boolean);
+
+  let packageManagerField: string | undefined;
+  const packageJson = await execa('docker', ['exec', containerId, 'cat', `${repoDir}/package.json`], { reject: false });
+  if (packageJson.exitCode === 0) {
+    try {
+      const parsed = JSON.parse(packageJson.stdout);
+      if (typeof parsed?.packageManager === 'string') packageManagerField = parsed.packageManager;
+    } catch {
+      // npm reports the malformed package.json with a clearer message during install
+    }
+  }
+
+  return pickInstallCommand(rootFiles, packageManagerField);
+}
+
+/**
+ * Returns the configured output directory if it contains an index.html, otherwise the first
+ * common output directory that does. Throws when none of them do.
+ */
+async function resolveOutputDir(
+  containerId: string,
+  repoDir: string,
+  configuredOutDir: string,
+  onLog: (line: string) => void
+): Promise<string> {
+  const candidates = [configuredOutDir, ...FALLBACK_OUTPUT_DIRS.filter((dir) => dir !== configuredOutDir)];
+
+  for (const dir of candidates) {
+    const check = await execa('docker', ['exec', containerId, 'test', '-f', `${repoDir}/${dir}/index.html`], { reject: false });
+    if (check.exitCode === 0) {
+      if (dir !== configuredOutDir) {
+        onLog(`[build] Output directory "${configuredOutDir}" has no index.html; using "${dir}" instead`);
+      }
+      return dir;
+    }
+  }
+
+  throw new Error(
+    `Build finished but no index.html was found in "${configuredOutDir}" (also checked ${candidates.slice(1).join(', ')}). ` +
+    `Set the correct output directory in the project's build settings.`
+  );
+}
+
+async function persistDetectedOutputDir(deploymentId: number, outputDir: string, onLog: (line: string) => void) {
+  try {
+    await prisma.project.updateMany({
+      where: { deployments: { some: { deployment_id: deploymentId } } },
+      data: { output_dir: outputDir },
+    });
+    onLog(`[build] Project output directory updated to "${outputDir}"`);
+  } catch (dbErr) {
+    console.error('[build] Failed to persist detected output directory:', dbErr);
+  }
+}
+
 async function writeLogsToDB(deploymentId: number, logs: string[]) {
 
-  const allLogs = logs.join()
+  const allLogs = logs.join('\n')
   try {
     return await prisma.deployment.update({
       where: {
@@ -240,9 +312,15 @@ async function writeLogsToDB(deploymentId: number, logs: string[]) {
 
 }
 
-async function dockerExec(containerId: string, cmd: string[], onLog?: (line: string) => void) {
+async function dockerExec(
+  containerId: string,
+  cmd: string[],
+  onLog?: (line: string) => void,
+  options: { workdir?: string } = {}
+) {
 
-  const child = execa('docker', ['exec', containerId, ...cmd], {
+  const workdirArgs = options.workdir ? ['--workdir', options.workdir] : [];
+  const child = execa('docker', ['exec', ...workdirArgs, containerId, ...cmd], {
     all: true,
   })
 
@@ -253,8 +331,10 @@ async function dockerExec(containerId: string, cmd: string[], onLog?: (line: str
   })
 
   return child.catch(err => {
+    // When output was streamed through onLog it is already in the build logs, so don't repeat it
+    const details = onLog ? `exit code ${err.exitCode}` : err.all;
     throw new Error(
-      `docker exec [${cmd[0]}] failed in container ${containerId}:\n${err.all}`
+      `docker exec [${cmd[0]}] failed in container ${containerId}:\n${details}`
     );
   })
 

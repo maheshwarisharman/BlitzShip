@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Github, Loader2, AlertCircle, X, Check, GitBranch } from "lucide-react";
+import { Search, Github, Loader2, AlertCircle, X, Check, GitBranch, Sparkles } from "lucide-react";
 import axios from "axios"
 import  {useEffect, useRef, useState} from "react"
 import { useAuth } from "@clerk/nextjs"
@@ -13,8 +13,19 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
+type DetectedBuildConfig = {
+    framework: string
+    frameworkLabel: string
+    buildCmd: string | null
+    outputDir: string
+    outputDirSource: string
+    packageManager: "npm" | "yarn" | "pnpm"
+    confidence: "high" | "low"
+    warnings: string[]
+}
+
 export default function DashboardPage() {
-    const { getToken, userId, isLoaded, isSignedIn } = useAuth();
+    const { getToken, isLoaded, isSignedIn } = useAuth();
     const router = useRouter();
 
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL
@@ -53,6 +64,12 @@ export default function DashboardPage() {
     const [domainError, setDomainError] = useState<string | null>(null);
     const [branches, setBranches] = useState<string[]>([])
     const [isFetchingBranches, setIsFetchingBranches] = useState(false)
+    const [detectedConfig, setDetectedConfig] = useState<DetectedBuildConfig | null>(null)
+    const [isDetectingConfig, setIsDetectingConfig] = useState(false)
+    const [detectError, setDetectError] = useState<string | null>(null)
+    const latestDetectIdRef = useRef(0)
+    // Fields the user has typed into are never overwritten by detection results
+    const userEditedRef = useRef({ build_cmd: false, output_dir: false })
 
     const domainInputRef = useRef<HTMLInputElement>(null);
     const [domainTooltipOpen, setDomainTooltipOpen] = useState(false);
@@ -165,7 +182,7 @@ export default function DashboardPage() {
             })
             if (response.data.success) {
                 // GitHub is already linked — open the import-repository flow
-                const reposRes = await axios.get(`${API_BASE_URL}/github/get-repos?user_id=${userId}`, {
+                const reposRes = await axios.get(`${API_BASE_URL}/github/get-repos`, {
                     headers: {
                         Authorization: `Bearer ${token}`
                     }
@@ -195,10 +212,10 @@ export default function DashboardPage() {
         try {
             const token = await getToken()
             if (!token) return;
-            const res = await axios.get(
-                `${API_BASE_URL}/github/get-branches?user_id=${userId}&repo=${encodeURIComponent(repoFullName)}`,
-                { headers: { Authorization: `Bearer ${token}` } }
-            )
+            const res = await axios.get(`${API_BASE_URL}/github/get-branches`, {
+                params: { repo: repoFullName },
+                headers: { Authorization: `Bearer ${token}` }
+            })
             if (res.data.success) {
                 const fetchedBranches: string[] = res.data.data
                 setBranches(fetchedBranches)
@@ -216,8 +233,53 @@ export default function DashboardPage() {
         }
     }
 
+    const detectBuildConfig = async (repoFullName: string, branch: string) => {
+        const detectId = ++latestDetectIdRef.current
+        setIsDetectingConfig(true)
+        setDetectError(null)
+        try {
+            const token = await getToken()
+            if (!token) return;
+            const res = await axios.get(`${API_BASE_URL}/github/detect-config`, {
+                params: { repo: repoFullName, branch },
+                headers: { Authorization: `Bearer ${token}` }
+            })
+            if (detectId !== latestDetectIdRef.current) return;
+
+            const detected: DetectedBuildConfig = res.data.data
+            setDetectedConfig(detected)
+            setProjectConfig(prev => ({
+                ...prev,
+                ...(!userEditedRef.current.build_cmd && detected.buildCmd ? { build_cmd: detected.buildCmd } : {}),
+                ...(!userEditedRef.current.output_dir ? { output_dir: detected.outputDir } : {}),
+            }))
+        } catch (error: unknown) {
+            if (detectId !== latestDetectIdRef.current) return;
+            console.error("Failed to detect build config:", error)
+            const apiError = axios.isAxiosError(error)
+                ? (error.response?.data as { error?: string } | undefined)?.error
+                : undefined
+            setDetectedConfig(null)
+            setDetectError(apiError || "Couldn't auto-detect build settings. Please enter them manually.")
+        } finally {
+            if (detectId === latestDetectIdRef.current) {
+                setIsDetectingConfig(false)
+            }
+        }
+    }
+
+    // Re-detect whenever the selected branch changes, since branches can use different setups
+    useEffect(() => {
+        if (!configModalOpen || !selectedRepo?.full_name || !projectConfig.build_branch) return;
+        detectBuildConfig(selectedRepo.full_name, projectConfig.build_branch)
+    }, [configModalOpen, selectedRepo?.full_name, projectConfig.build_branch]);
+
     const handleImportClick = (repo: any) => {
         const defaultBranch = repo.default_branch || "main"
+        userEditedRef.current = { build_cmd: false, output_dir: false };
+        setDetectedConfig(null);
+        setDetectError(null);
+        setIsDetectingConfig(true);
         setSelectedRepo(repo);
         setProjectConfig({
             name: repo.name,
@@ -312,6 +374,7 @@ export default function DashboardPage() {
         } catch (error: any) {
             const msg =
                 error?.response?.data?.message ||
+                error?.response?.data?.errors?.[0]?.message ||
                 error?.message ||
                 "An unexpected error occurred. Please try again.";
             setDeployError(msg);
@@ -496,27 +559,72 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="mt-2 border border-border rounded-lg bg-background p-4 flex flex-col gap-4">
-                  <h3 className="text-sm font-semibold tracking-tight">Build and Output Settings</h3>
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold tracking-tight">Build and Output Settings</h3>
+                    {isDetectingConfig ? (
+                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        Detecting framework…
+                      </span>
+                    ) : detectedConfig ? (
+                      <Badge
+                        variant="outline"
+                        className={cn(detectedConfig.confidence === "low" && "border-amber-500/40 text-amber-400")}
+                      >
+                        <Sparkles />
+                        {detectedConfig.framework === "unknown" ? "Framework not detected" : detectedConfig.frameworkLabel}
+                      </Badge>
+                    ) : null}
+                  </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex flex-col gap-2">
                       <label className="text-xs font-medium text-muted-foreground">BUILD COMMAND</label>
                       <Input 
                         value={projectConfig.build_cmd} 
-                        onChange={(e) => setProjectConfig({...projectConfig, build_cmd: e.target.value})} 
+                        onChange={(e) => {
+                          userEditedRef.current.build_cmd = true;
+                          setProjectConfig({...projectConfig, build_cmd: e.target.value});
+                        }} 
                         className="border-border bg-neutral-900/50 font-mono text-sm h-9" 
                         placeholder="npm run build"
                       />
+                      {detectedConfig && !isDetectingConfig && (
+                        <span className="text-xs text-muted-foreground">
+                          Dependencies install with <span className="font-mono">{detectedConfig.packageManager}</span>
+                        </span>
+                      )}
                     </div>
                     
                     <div className="flex flex-col gap-2">
                       <label className="text-xs font-medium text-muted-foreground">OUTPUT DIRECTORY</label>
                       <Input 
                         value={projectConfig.output_dir} 
-                        onChange={(e) => setProjectConfig({...projectConfig, output_dir: e.target.value})} 
+                        onChange={(e) => {
+                          userEditedRef.current.output_dir = true;
+                          setProjectConfig({...projectConfig, output_dir: e.target.value});
+                        }} 
                         className="border-border bg-neutral-900/50 font-mono text-sm h-9" 
                         placeholder="dist" 
                       />
+                      {detectedConfig && !isDetectingConfig && (
+                        projectConfig.output_dir.trim() === detectedConfig.outputDir ? (
+                          <span className="text-xs text-muted-foreground">
+                            Detected from <span className="font-mono">{detectedConfig.outputDirSource}</span>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              userEditedRef.current.output_dir = false;
+                              setProjectConfig(prev => ({ ...prev, output_dir: detectedConfig.outputDir }));
+                            }}
+                            className="w-fit text-xs text-muted-foreground underline-offset-4 hover:underline hover:text-foreground"
+                          >
+                            Use detected: <span className="font-mono">{detectedConfig.outputDir}</span>
+                          </button>
+                        )
+                      )}
                     </div>
                     
                     <div className="flex flex-col gap-2 md:col-span-2">
@@ -554,6 +662,17 @@ export default function DashboardPage() {
                     </div>
 
                   </div>
+
+                  {!isDetectingConfig && (detectError || (detectedConfig && detectedConfig.warnings.length > 0)) && (
+                    <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-md text-amber-400 text-xs">
+                      <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                      <div className="flex flex-col gap-1">
+                        {detectError
+                          ? <span>{detectError}</span>
+                          : detectedConfig?.warnings.map((warning) => <span key={warning}>{warning}</span>)}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="mt-2 border border-border rounded-lg bg-background p-4 flex flex-col gap-4">
                   <h3 className="text-sm font-semibold tracking-tight">Environment Variables</h3>
@@ -641,7 +760,7 @@ export default function DashboardPage() {
                     >
                       <Button
                         onClick={handleDeploy}
-                        disabled={isDeploying || !projectConfig.name.trim() || domainAvailable !== true || isCheckingDomain}
+                        disabled={isDeploying || !projectConfig.name.trim() || !projectConfig.output_dir.trim() || domainAvailable !== true || isCheckingDomain}
                         className="bg-foreground text-background hover:bg-neutral-200 min-w-28"
                       >
                         {isDeploying ? (

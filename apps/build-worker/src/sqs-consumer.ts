@@ -13,6 +13,7 @@ const QUEUE_URL = process.env.SQS_QUEUE_URL!;
 const POLL_INTERVAL_MS = 5_000;
 const VISIBILITY_TIMEOUT = 900;
 const PRIMARY_BACKEND_URL = process.env.PRIMARY_BACKEND_URL || 'http://localhost:4000';
+const INTERNAL_API_SECRET = process.env.INTERNAL_API_SECRET ?? '';
 
 export async function startBuildConsumer(): Promise<never> {
     console.log(`[sqs] Polling queue: ${QUEUE_URL}`);
@@ -79,15 +80,15 @@ async function parseJobFromMessage(message: Message): Promise<BuildJob> {
         payload.repoId = String(payload.repoId);
     }
 
-    //Generate the Github Installation Id
-    try {
-        const response = await fetch(`${PRIMARY_BACKEND_URL}/github/installation-token?user_id=${payload.user_id}`)
-        const installation_id: any = await response.json()
-        payload.gitToken = installation_id.data.token
-    } catch(e) {
-        console.error(`Error Generating a github Token: ${e}`)
-        payload.gitToken = null
+    if (
+        payload.buildBranch !== undefined &&
+        (typeof payload.buildBranch !== 'string' || !payload.buildBranch || payload.buildBranch.startsWith('-'))
+    ) {
+        throw new Error(`Message ${message.MessageId} contains an invalid buildBranch`);
     }
+
+    // Without a token the clone still works for public repositories
+    payload.gitToken = await fetchInstallationToken(payload.user_id);
 
 
     // Validate optional envVars — must be a plain object with string values
@@ -105,6 +106,24 @@ async function parseJobFromMessage(message: Message): Promise<BuildJob> {
     }
 
     return payload as BuildJob;
+}
+
+async function fetchInstallationToken(userId: string): Promise<string | undefined> {
+    try {
+        const response = await fetch(
+            `${PRIMARY_BACKEND_URL}/github/installation-token?user_id=${encodeURIComponent(userId)}`,
+            { headers: { 'x-internal-secret': INTERNAL_API_SECRET } }
+        );
+        if (!response.ok) {
+            console.error(`[sqs] Failed to fetch GitHub installation token: HTTP ${response.status}`);
+            return undefined;
+        }
+        const body: any = await response.json();
+        return body?.data?.token ?? undefined;
+    } catch (e) {
+        console.error('[sqs] Error fetching GitHub installation token:', e);
+        return undefined;
+    }
 }
 
 async function acknowledgeMessage(receiptHandle: string): Promise<void> {

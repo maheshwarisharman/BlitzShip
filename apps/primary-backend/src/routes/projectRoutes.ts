@@ -4,6 +4,7 @@ import { getAuth } from "@clerk/express";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { encryptEnvMap, decryptEnvMap } from "@repo/env-crypto";
+import { normalizeOutputDir, OUTPUT_DIR_RULES_MESSAGE } from "../utils/outputDir.js";
 
 const router: Router = Router();
 
@@ -276,7 +277,13 @@ router.put("/build-settings", async (req, res) => {
         message: "output_dir must be a string",
       });
     }
-    updateData.output_dir = output_dir;
+    const normalizedOutputDir = normalizeOutputDir(output_dir);
+    if (!normalizedOutputDir) {
+      return res.status(400).json({
+        message: OUTPUT_DIR_RULES_MESSAGE,
+      });
+    }
+    updateData.output_dir = normalizedOutputDir;
   }
 
   try {

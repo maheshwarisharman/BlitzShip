@@ -46,6 +46,7 @@ export async function triggerDeployment(
         repoId: project.repoId,
         repoName: project.repoName,
         repoUrl: project.github_url,
+        buildBranch: project.build_branch,
         buildCommand: project.build_cmd,
         buildOutDir: project.output_dir,
         user_id: project.user_id,
